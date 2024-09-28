@@ -324,3 +324,45 @@ uint8_t Tm1637_Coding_One(DigitDisplay_t* digitdisplay, uint8_t disp_data, uint8
 void Tm1637_BitDelay(void) {
     vTaskDelay(pdMS_TO_TICKS(5));
 }
+
+void Tm1637_DisplayClockDot(DigitDisplay_t* digitdisplay, uint8_t disp_data[]) {
+    uint8_t seg_data[digitdisplay->digit_count];
+    uint8_t i;
+
+    if (digitdisplay->digit_count == 6)
+    {
+        seg_data[0] = Tm1637_Coding_One(digitdisplay, DATA_CREAR, POINT_OFF);
+        seg_data[1] = Tm1637_Coding_One(digitdisplay, disp_data[0], POINT_OFF);
+        seg_data[2] = Tm1637_Coding_One(digitdisplay, disp_data[1], POINT_OFF);
+        seg_data[3] = Tm1637_Coding_One(digitdisplay, disp_data[2], POINT_OFF);
+        if (disp_data[5] % 2 == 0)
+        {
+            seg_data[4] = Tm1637_Coding_One(digitdisplay, disp_data[3], POINT_OFF);
+        }
+        else
+        {
+            seg_data[4] = Tm1637_Coding_One(digitdisplay, disp_data[3], POINT_ON);
+        }
+        seg_data[5] = Tm1637_Coding_One(digitdisplay, DATA_CREAR, POINT_OFF);
+    }
+    else
+    {
+        for (uint8_t i = 0; i < digitdisplay->digit_count; i++) {
+            seg_data[i] = Tm1637_Coding_One(digitdisplay, disp_data[i], POINT_OFF);
+        }
+    }
+    Tm1637_Start(digitdisplay);              // Start signal sent to TM1637 from MCU
+    Tm1637_WriteByte(digitdisplay, ADDR_AUTO); // Command1: Set data
+    Tm1637_Stop(digitdisplay);
+    Tm1637_Start(digitdisplay);
+    Tm1637_WriteByte(digitdisplay, STARTADDR); // Command2: Set address (automatic address adding)
+
+    for (i = 0; i < digitdisplay->digit_count; i++) {
+        Tm1637_WriteByte(digitdisplay, seg_data[i]);    // Transfer display data (8 bits x num_of_digits)
+    }
+
+    Tm1637_Stop(digitdisplay);
+    Tm1637_Start(digitdisplay);
+    Tm1637_WriteByte(digitdisplay, CMD_DISP_CTRL_BASE + digitdisplay->brightness); // Control display
+    Tm1637_Stop(digitdisplay);
+}

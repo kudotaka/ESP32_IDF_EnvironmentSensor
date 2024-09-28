@@ -516,7 +516,8 @@ static void gpio_clock_task(void* arg)
                 listDisp_1[3] = minute01;
                 listDisp_1[4] = second10;
                 listDisp_1[5] = second01;
-                Tm1637_DisplayAll(digitdisplay_1, listDisp_1);
+//                Tm1637_DisplayAll(digitdisplay_1, listDisp_1);
+                Tm1637_DisplayClockDot(digitdisplay_1, listDisp_1);
             }
             else
             {

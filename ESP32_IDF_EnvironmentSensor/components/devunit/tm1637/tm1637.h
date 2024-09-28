@@ -50,6 +50,7 @@ void Tm1637_ClearDisplay(DigitDisplay_t* digitdisplay);
 void Tm1637_Coding_Full(DigitDisplay_t* digitdisplay, uint8_t disp_data[]);
 uint8_t Tm1637_Coding_One(DigitDisplay_t* digitdisplay, uint8_t disp_data, uint8_t add_point);
 void Tm1637_BitDelay(void);
+void Tm1637_DisplayClockDot(DigitDisplay_t* digitdisplay, uint8_t disp_data[]);
 
 #ifdef __cplusplus
 }
