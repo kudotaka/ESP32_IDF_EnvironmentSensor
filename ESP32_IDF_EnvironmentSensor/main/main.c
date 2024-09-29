@@ -1153,6 +1153,106 @@ static void deep_sleep_register_rtc_timer_wakeup(void)
 #if CONFIG_SOFTWARE_EXTERNAL_6DIGIT_DISPLAY_SUPPORT
 TaskHandle_t xDigitDisplay;
 DigitDisplay_t* digitdisplay_1;
+
+void convertValueTo3Digit(float value, uint8_t* digit)
+{
+    int32_t convertValue = value * 10;
+    if (convertValue > 999)
+    {
+        digit[0] = '^';
+        digit[1] = '^';
+        digit[2] = '^';
+    }
+    else if (convertValue > 99)
+    {
+        digit[0] = convertValue / 100;
+        digit[1] = ( convertValue % 100 ) / 10;
+        digit[2] = ( convertValue % 100 ) % 10;
+    }
+    else if (convertValue > 0)
+    {
+        digit[0] = 0x7f;
+        digit[1] = ( convertValue % 100 ) / 10;
+        digit[2] = ( convertValue % 100 ) % 10;
+    }
+    else if (convertValue == 0)
+    {
+        digit[0] = 0x7f;
+        digit[1] = 0;
+        digit[2] = 0;
+    }
+    else if (convertValue > -100 )
+    {
+        int32_t convertAbsValue = abs(convertValue);
+        digit[0] = '-';
+        digit[1] = convertAbsValue / 10;
+        digit[2] = convertAbsValue % 10;
+    }
+    else
+    {
+        digit[0] = '_';
+        digit[1] = '_';
+        digit[2] = '_';
+    }
+}
+void convertValueTo4Digit(float value, uint8_t* digit)
+{
+    int32_t convertValue = (int32_t)(value * 10);
+    if (convertValue > 99999)
+    {
+        digit[0] = '^';
+        digit[1] = '^';
+        digit[2] = '^';
+        digit[3] = '^';
+    }
+    else if (convertValue > 9999)
+    {
+        convertValue /= 10;
+        digit[0] = convertValue / 1000;
+        digit[1] = ( convertValue % 1000 ) /100;
+        digit[2] = ( ( convertValue % 1000 ) %100 ) / 10;
+        digit[3] = ( ( convertValue % 1000 ) %100 ) % 10;
+    }
+    else if (convertValue > 999)
+    {
+        convertValue /= 10;
+        digit[0] = 0x7f;
+        digit[1] = convertValue / 100;
+        digit[2] = ( convertValue % 100 ) / 10;
+        digit[3] = ( convertValue % 100 ) % 10;
+    }
+    else if (convertValue > 99)
+    {
+        convertValue /= 10;
+        digit[0] = 0x7f;
+        digit[1] = 0x7f;
+        digit[2] = convertValue / 10;
+        digit[3] = convertValue % 10;
+    }
+    else if (convertValue > 0)
+    {
+        convertValue /= 10;
+        digit[0] = 0x7f;
+        digit[1] = 0x7f;
+        digit[2] = 0x7f;
+        digit[3] = convertValue % 10;
+    }
+    else if (convertValue == 0)
+    {
+        digit[0] = 0x7f;
+        digit[1] = 0x7f;
+        digit[2] = 0x7f;
+        digit[3] = 0;
+    }
+    else
+    {
+        digit[0] = '_';
+        digit[1] = '_';
+        digit[2] = '_';
+        digit[3] = '_';
+    }
+}
+
 void vDigitDisplayTask(void *pvParametes)
 {
     ESP_LOGI(TAG, "start Digit Display");
@@ -1168,129 +1268,47 @@ void vDigitDisplayTask(void *pvParametes)
 // |        |
 //  --0x08--   0x80
 
-// CountDown
-    uint8_t listDisp_1[XDIGIT_DISPLAY_DIGIT_COUNT];
-    uint8_t count = UINT8_MAX;
+// ENV
     Tm1637_Init();
-    if (Tm1637_Enable(XDIGIT_DISPLAY_CLK_EXT1_GPIO_PIN, XDIGIT_DISPLAY_DATA_EXT1_GPIO_PIN) == ESP_OK) {
+/*    if (Tm1637_Enable(XDIGIT_DISPLAY_CLK_EXT1_GPIO_PIN, XDIGIT_DISPLAY_DATA_EXT1_GPIO_PIN) == ESP_OK) {
         digitdisplay_1 = Tm1637_Attach(XDIGIT_DISPLAY_CLK_EXT1_GPIO_PIN, XDIGIT_DISPLAY_DATA_EXT1_GPIO_PIN, BRIGHT_TYPICAL, XDIGIT_DISPLAY_DIGIT_COUNT);
+    } else {
+*/
+    if (Tm1637_Enable(GPIO_NUM_7, GPIO_NUM_6) == ESP_OK) {
+        digitdisplay_1 = Tm1637_Attach(GPIO_NUM_7, GPIO_NUM_6, BRIGHT_TYPICAL, XDIGIT_DISPLAY_DIGIT_COUNT);
     } else {
         ESP_LOGE(TAG, "Digit Display Tm1637_Enable Error");
         vTaskDelete(NULL);
     }
     Tm1637_ClearDisplay(digitdisplay_1);
     while(1){
-        if (count == 0) {
-            count = UINT8_MAX;
-        }
-        uint8_t digit3 = count / 100;
-        uint8_t digit2 = ( count % 100 ) / 10;
-        uint8_t digit1 = ( count % 10 );
-        listDisp_1[0] = 0x7f; //DISPLAY_OFF
-        listDisp_1[1] = 0x7f; //DISPLAY_OFF
-        listDisp_1[2] = 0x7f; //DISPLAY_OFF
-        listDisp_1[3] = digit3;
-        listDisp_1[4] = digit2;
-        listDisp_1[5] = digit1;
-        Tm1637_DisplayAll(digitdisplay_1, listDisp_1);
-        count--;
-        vTaskDelay(pdMS_TO_TICKS(300));
-    }
-    vTaskDelete(NULL); // Should never get to here...
-
 /*
-    uint8_t anime[] = {0x00, 0x30, 0x38, 0x78, 0x79, 0x7f};
-    uint8_t animeCurrent = 0;
-    uint8_t animeMax = sizeof(anime)/sizeof(uint8_t);
-    uint8_t animeDigitPosition = 1;
-    uint8_t animeDigitMax = XDIGIT_DISPLAY_DIGIT_COUNT;
-    uint8_t data = 0x00;
+        uint8_t temp_digit[3] = {0};
+        uint8_t humi_digit[3] = {0};
 
-    Tm1637_Init();
-    if (Tm1637_Enable(XDIGIT_DISPLAY_CLK_EXT1_GPIO_PIN, XDIGIT_DISPLAY_DATA_EXT1_GPIO_PIN) == ESP_OK) {
-        digitdisplay_1 = Tm1637_Attach(XDIGIT_DISPLAY_CLK_EXT1_GPIO_PIN, XDIGIT_DISPLAY_DATA_EXT1_GPIO_PIN, BRIGHT_TYPICAL, XDIGIT_DISPLAY_DIGIT_COUNT);
-    } else {
-        ESP_LOGE(TAG, "Digit Display Tm1637_Enable Error");
-        vTaskDelete(NULL);
-        return;
-    }
-    while(1) {
-        Tm1637_ClearDisplay(digitdisplay_1);
-        vTaskDelay(pdMS_TO_TICKS(1000));
-        for (animeDigitPosition = 1; animeDigitPosition < animeDigitMax+1; animeDigitPosition++) {
-            for (animeCurrent = 0; animeCurrent < animeMax; animeCurrent++) {
-                for (uint8_t position = DIGIT_COUNT; position > animeDigitPosition-1; position--) {
-                    for (uint8_t digit = DIGIT_COUNT; digit > 0; digit--) {
-                        data = 0x00;
-                        if (digit == position) {
-                            data += 0x80;
-                        } else {
-                            //data = 0x00;
-                        }
+        convertValueTo3Digit(g_temperature, temp_digit);
+        convertValueTo3Digit(g_humidity, humi_digit);
 
-                        if (digit == animeDigitPosition) {
-                            data += anime[animeCurrent];
-                        } else if (digit < animeDigitPosition) {
-                            data = 0xff;
-                        }
+        Tm1637_DisplayBitAddPoint(digitdisplay_1, 0, temp_digit[0], POINT_OFF);
+        Tm1637_DisplayBitAddPoint(digitdisplay_1, 1, temp_digit[1], POINT_ON);
+        Tm1637_DisplayBitAddPoint(digitdisplay_1, 2, temp_digit[2], POINT_OFF);
+        Tm1637_DisplayBitAddPoint(digitdisplay_1, 3, humi_digit[0], POINT_OFF);
+        Tm1637_DisplayBitAddPoint(digitdisplay_1, 4, humi_digit[1], POINT_ON);
+        Tm1637_DisplayBitAddPoint(digitdisplay_1, 5, humi_digit[2], POINT_OFF);
+*/
+        uint8_t pres_digit[4] = {0};
+        convertValueTo4Digit(g_pressure, pres_digit);
+        Tm1637_DisplayBitAddPoint(digitdisplay_1, 0, pres_digit[0], POINT_OFF);
+        Tm1637_DisplayBitAddPoint(digitdisplay_1, 1, pres_digit[1], POINT_OFF);
+        Tm1637_DisplayBitAddPoint(digitdisplay_1, 2, pres_digit[2], POINT_OFF);
+        Tm1637_DisplayBitAddPoint(digitdisplay_1, 3, pres_digit[3], POINT_OFF);
+        Tm1637_DisplayBitAddPoint(digitdisplay_1, 4, 0x7f, POINT_OFF);
+        Tm1637_DisplayBitAddPoint(digitdisplay_1, 5, 0x7f, POINT_OFF);
 
-                        Tm1637_DisplayBitRowdata(digitdisplay_1, digit-1, data);
-                    }
-                    vTaskDelay(pdMS_TO_TICKS(1000));
-                }
-            }
-        }
+        vTaskDelay(pdMS_TO_TICKS(10000));
     }
     vTaskDelete(NULL); // Should never get to here...
-*/
-/*
-// Sample number
-    uint8_t listDisp_1[XDIGIT_DISPLAY_DIGIT_COUNT];
-    uint8_t count = 0;
-    Tm1637_Init();
-    if (Tm1637_Enable(XDIGIT_DISPLAY_CLK_EXT1_GPIO_PIN, XDIGIT_DISPLAY_DATA_EXT1_GPIO_PIN) == ESP_OK) {
-        digitdisplay_1 = Tm1637_Attach(XDIGIT_DISPLAY_CLK_EXT1_GPIO_PIN, XDIGIT_DISPLAY_DATA_EXT1_GPIO_PIN, BRIGHT_TYPICAL, XDIGIT_DISPLAY_DIGIT_COUNT);
-    } else {
-        ESP_LOGE(TAG, "Digit Display Tm1637_Enable Error");
-        vTaskDelete(NULL);
-    }
-    Tm1637_ClearDisplay(digitdisplay_1);
-    while(1){
-        if (count == UINT8_MAX) {
-            count = 0;
-        }
-        if (count%2) {
-            for (uint8_t i = 0; i < DIGIT_COUNT; i++) {
-                listDisp_1[i] = i;
-            }
-        } else {
-            for (uint8_t i = 0; i < DIGIT_COUNT; i++) {
-                listDisp_1[i] = i+4;
-            }
-        }
-        Tm1637_DisplayAll(digitdisplay_1, listDisp_1);
-        count++;
-        vTaskDelay(pdMS_TO_TICKS(300));
-    }
-    vTaskDelete(NULL); // Should never get to here...
-*/
-/*
-// Sample message
-    Tm1637_Init();
-    if (Tm1637_Enable(XDIGIT_DISPLAY_CLK_EXT1_GPIO_PIN, XDIGIT_DISPLAY_DATA_EXT1_GPIO_PIN) == ESP_OK) {
-        digitdisplay_1 = Tm1637_Attach(XDIGIT_DISPLAY_CLK_EXT1_GPIO_PIN, XDIGIT_DISPLAY_DATA_EXT1_GPIO_PIN, BRIGHT_TYPICAL, XDIGIT_DISPLAY_DIGIT_COUNT);
-    } else {
-        ESP_LOGE(TAG, "Digit Display Tm1637_Enable Error");
-        vTaskDelete(NULL);
-    }
-    while (1) {
-        Tm1637_ClearDisplay(digitdisplay_1);
-        vTaskDelay(pdMS_TO_TICKS(500));
-        Tm1637_DisplayStr(digitdisplay_1, "HELL0-1234567890", 500);
-        vTaskDelay(pdMS_TO_TICKS(500));
-    }
-    vTaskDelete(NULL); // Should never get to here...
-*/
+
 }
 #endif //CONFIG_SOFTWARE_EXTERNAL_6DIGIT_DISPLAY_SUPPORT
 
@@ -1491,7 +1509,7 @@ void app_main(void)
 
 #if CONFIG_SOFTWARE_EXTERNAL_6DIGIT_DISPLAY_SUPPORT
     // DIGIT DISPLAY
-//    xTaskCreatePinnedToCore(&vDigitDisplayTask, "vDigitDisplayTask", 4096 * 1, NULL, 2, &xDigitDisplay, TASK_CORE);
+    xTaskCreatePinnedToCore(&vDigitDisplayTask, "vDigitDisplayTask", 4096 * 1, NULL, 2, &xDigitDisplay, TASK_CORE);
 #endif //CONFIG_SOFTWARE_EXTERNAL_6DIGIT_DISPLAY_SUPPORT
 
 #if CONFIG_MEASURE_OPERATION_VOLTAGE_SUPPORT
