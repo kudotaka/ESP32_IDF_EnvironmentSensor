@@ -49,6 +49,21 @@
 #include "esp_adc/adc_cali_scheme.h"
 #endif //CONFIG_MEASURE_OPERATION_VOLTAGE_SUPPORT
 
+#if CONFIG_SOFTWARE_EXTERNAL_LED_SUPPORT
+#include <stdio.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/semphr.h"
+#include "driver/ledc.h"
+#include "esp_err.h"
+#define LEDC_LS_TIMER          LEDC_TIMER_0
+#define LEDC_LS_MODE           LEDC_LOW_SPEED_MODE
+#define LEDC_LS_CH0_GPIO       LED_EXT1_GPIO_PIN
+#define LEDC_LS_CH0_CHANNEL    LEDC_CHANNEL_0
+#define LEDC_DUTY_RESOLUTION   (4096)
+#define LEDC_FADE_TIME    (2500)
+#endif // CONFIG_SOFTWARE_EXTERNAL_LED_SUPPORT
+
 #if (  CONFIG_SOFTWARE_INTERNAL_WIFI_SUPPORT \
     || CONFIG_SOFTWARE_INTERNAL_BUTTON_SUPPORT \
     || CONFIG_SOFTWARE_EXTERNAL_SK6812_SUPPORT \
@@ -839,21 +854,83 @@ void vSensor_Viewer_task(void *pvParametes)
 
 
 #if CONFIG_SOFTWARE_EXTERNAL_LED_SUPPORT
+#if CONFIG_SOFTWARE_EXTERNAL_LED_MODE_LEDC
+static IRAM_ATTR bool cb_ledc_fade_end_event(const ledc_cb_param_t *param, void *user_arg)
+{
+    BaseType_t taskAwoken = pdFALSE;
+
+    if (param->event == LEDC_FADE_END_EVT) {
+        SemaphoreHandle_t counting_sem = (SemaphoreHandle_t) user_arg;
+        xSemaphoreGiveFromISR(counting_sem, &taskAwoken);
+    }
+
+    return (taskAwoken == pdTRUE);
+}
+#endif // CONFIG_SOFTWARE_EXTERNAL_LED_MODE_LEDC
+
 TaskHandle_t xExternalLED;
 Led_t* led_ext1;
 static void vExternal_led_task(void* pvParameters) {
     ESP_LOGD(TAG, "start EXTERNAL LED");
+
+#if CONFIG_SOFTWARE_EXTERNAL_LED_MODE_LEDC
+    ledc_timer_config_t ledc_timer = {
+        .duty_resolution = LEDC_TIMER_13_BIT, // resolution of PWM duty
+        .freq_hz = 4000,                      // frequency of PWM signal
+        .speed_mode = LEDC_LS_MODE,           // timer mode
+        .timer_num = LEDC_LS_TIMER,            // timer index
+        .clk_cfg = LEDC_AUTO_CLK,              // Auto select the source clock
+    };
+    ledc_timer_config(&ledc_timer);
+    ledc_channel_config_t ledc_channel = {
+        .channel    = LEDC_LS_CH0_CHANNEL,
+        .duty       = 0,
+        .gpio_num   = LEDC_LS_CH0_GPIO,
+        .speed_mode = LEDC_LS_MODE,
+        .hpoint     = 0,
+        .timer_sel  = LEDC_LS_TIMER,
+        .flags.output_invert = 0
+    };
+    ledc_channel_config(&ledc_channel);
+
+    ledc_fade_func_install(0);
+    ledc_cbs_t callbacks = {
+        .fade_cb = cb_ledc_fade_end_event
+    };
+    SemaphoreHandle_t counting_sem = xSemaphoreCreateCounting(1, 0);
+    ledc_cb_register(ledc_channel.speed_mode, ledc_channel.channel, &callbacks, (void *) counting_sem);
+#endif // CONFIG_SOFTWARE_EXTERNAL_LED_MODE_LEDC
+
+#if CONFIG_SOFTWARE_EXTERNAL_LED_MODE_GPIO
     Led_Init();
 
     if (Led_Enable(LED_EXT1_GPIO_PIN) == ESP_OK) {
         led_ext1 = Led_Attach(LED_EXT1_GPIO_PIN);
     }
+#endif // CONFIG_SOFTWARE_EXTERNAL_LED_MODE_GPIO
     while(1){
+#if CONFIG_SOFTWARE_EXTERNAL_LED_MODE_LEDC
+        ledc_set_fade_with_time(ledc_channel.speed_mode,
+                                ledc_channel.channel, LEDC_DUTY_RESOLUTION, LEDC_FADE_TIME);
+        ledc_fade_start(ledc_channel.speed_mode,
+                        ledc_channel.channel, LEDC_FADE_NO_WAIT);
+        xSemaphoreTake(counting_sem, portMAX_DELAY);
+
+        ledc_set_fade_with_time(ledc_channel.speed_mode,
+                                ledc_channel.channel, 0, LEDC_FADE_TIME);
+        ledc_fade_start(ledc_channel.speed_mode,
+                        ledc_channel.channel, LEDC_FADE_NO_WAIT);
+        xSemaphoreTake(counting_sem, portMAX_DELAY);
+
+        vTaskDelay( pdMS_TO_TICKS(1000) );
+#endif // CONFIG_SOFTWARE_EXTERNAL_LED_MODE_LEDC
+#if CONFIG_SOFTWARE_EXTERNAL_LED_MODE_GPIO
         Led_OnOff(led_ext1, true);
         vTaskDelay(pdMS_TO_TICKS(700));
 
         Led_OnOff(led_ext1, false);
         vTaskDelay(pdMS_TO_TICKS(300));
+#endif // CONFIG_SOFTWARE_EXTERNAL_LED_MODE_GPIO
     }
 
     vTaskDelete(NULL); // Should never get to here...
@@ -871,12 +948,33 @@ void vExternal_RGBLedBlink_task(void *pvParametes)
     ESP_LOGD(TAG, "start EXTERNAL RGBLedBlink");
 
     esp_err_t res = ESP_OK;
-    uint8_t rgbled_count = 8;
+    uint8_t rgbled_count = 1;
     uint8_t blink_count = 5;
+
     uint32_t colors[] = {SK6812_COLOR_BLUE, SK6812_COLOR_LIME, SK6812_COLOR_AQUA
                     , SK6812_COLOR_RED, SK6812_COLOR_MAGENTA, SK6812_COLOR_YELLOW
                     , SK6812_COLOR_WHITE};
 
+/*
+    uint32_t colors[] = {
+                          0xFF0000, 0xF70000, 0xEF0000, 0xE70000
+                        , 0xDF0000, 0xD70000, 0xCF0000, 0xC70000
+                        , 0xBF0000, 0xB70000, 0xAF0000, 0xA70000
+                        , 0x9F0000, 0x970000, 0x8F0000, 0x870000
+                        , 0x7F0000, 0x770000, 0x6F0000, 0x670000
+                        , 0x5F0000, 0x570000, 0x4F0000, 0x470000
+                        , 0x3F0000, 0x370000, 0x2F0000, 0x270000
+                        , 0x1F0000, 0x170000, 0x0F0000, 0x070000 //
+                        , 0x070000, 0x0F0000, 0x170000, 0x1F0000
+                        , 0x270000, 0x2F0000, 0x370000, 0x3F0000
+                        , 0x470000, 0x4F0000, 0x570000, 0x5F0000
+                        , 0x670000, 0x6F0000, 0x770000, 0x7F0000
+                        , 0x870000, 0x8F0000, 0x970000, 0x9F0000
+                        , 0xA70000, 0xAF0000, 0xB70000, 0xBF0000
+                        , 0xC70000, 0xCF0000, 0xD70000, 0xDF0000
+                        , 0xE70000, 0xEF0000, 0xF70000, 0xFF0000
+                        };
+*/
     res = Sk6812_Init_Ex(&px_ext1, rgbled_count, RGBLED_EXT1_GPIO_PIN, &rgb_ext1_channel, &rgb_ext1_encoder);
     if (res != ESP_OK) {
         ESP_LOGE(TAG, "vExternal_RGBLedBlink_task() Sk6812_Init_Ex");
@@ -905,6 +1003,31 @@ void vExternal_RGBLedBlink_task(void *pvParametes)
                 vTaskDelay(pdMS_TO_TICKS(1000));
             }
         }
+/*
+        for (uint8_t c = 0; c < sizeof(colors)/sizeof(uint32_t); c++) {
+//            ESP_LOGI(TAG, "Sk6812_SetAllColor_Ex %ld", colors[c]);
+            Sk6812_SetAllColor_Ex(&px_ext1, colors[c]);
+            Sk6812_Show_Ex(&px_ext1, rgb_ext1_channel, rgb_ext1_encoder);
+            vTaskDelay(pdMS_TO_TICKS(100));
+        }
+*/
+/*
+        for (uint8_t c = 255; c > 56; c--)
+        {
+            Sk6812_SetColorFromGRBW_Ex(&px_ext1, 0, 0, c, 0, 0);
+            Sk6812_Show_Ex(&px_ext1, rgb_ext1_channel, rgb_ext1_encoder);
+            vTaskDelay(pdMS_TO_TICKS(30));
+        }
+        vTaskDelay(pdMS_TO_TICKS(500));
+        for (uint8_t r = 56; r < 255; r++)
+        {
+            Sk6812_SetColorFromGRBW_Ex(&px_ext1, 0, 0, r, 0, 0);
+            Sk6812_Show_Ex(&px_ext1, rgb_ext1_channel, rgb_ext1_encoder);
+            vTaskDelay(pdMS_TO_TICKS(30));
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(2000));
+*/
     }
 }
 #endif //CONFIG_SOFTWARE_EXTERNAL_SK6812_SUPPORT
@@ -1253,6 +1376,7 @@ void convertValueTo4Digit(float value, uint8_t* digit)
     }
 }
 
+#if ( CONFIG_SOFTWARE_ESP_MQTT_SUPPORT || CONFIG_SOFTWARE_SENSOR_USE_SENSOR )
 void vDigitDisplayTask(void *pvParametes)
 {
     ESP_LOGI(TAG, "start Digit Display");
@@ -1282,7 +1406,7 @@ void vDigitDisplayTask(void *pvParametes)
     }
     Tm1637_ClearDisplay(digitdisplay_1);
     while(1){
-/*
+
         uint8_t temp_digit[3] = {0};
         uint8_t humi_digit[3] = {0};
 
@@ -1295,8 +1419,8 @@ void vDigitDisplayTask(void *pvParametes)
         Tm1637_DisplayBitAddPoint(digitdisplay_1, 3, humi_digit[0], POINT_OFF);
         Tm1637_DisplayBitAddPoint(digitdisplay_1, 4, humi_digit[1], POINT_ON);
         Tm1637_DisplayBitAddPoint(digitdisplay_1, 5, humi_digit[2], POINT_OFF);
-*/
-        uint8_t pres_digit[4] = {0};
+
+/*        uint8_t pres_digit[4] = {0};
         convertValueTo4Digit(g_pressure, pres_digit);
         Tm1637_DisplayBitAddPoint(digitdisplay_1, 0, pres_digit[0], POINT_OFF);
         Tm1637_DisplayBitAddPoint(digitdisplay_1, 1, pres_digit[1], POINT_OFF);
@@ -1304,12 +1428,13 @@ void vDigitDisplayTask(void *pvParametes)
         Tm1637_DisplayBitAddPoint(digitdisplay_1, 3, pres_digit[3], POINT_OFF);
         Tm1637_DisplayBitAddPoint(digitdisplay_1, 4, 0x7f, POINT_OFF);
         Tm1637_DisplayBitAddPoint(digitdisplay_1, 5, 0x7f, POINT_OFF);
-
+*/
         vTaskDelay(pdMS_TO_TICKS(10000));
     }
     vTaskDelete(NULL); // Should never get to here...
 
 }
+#endif //( CONFIG_SOFTWARE_ESP_MQTT_SUPPORT || CONFIG_SOFTWARE_SENSOR_USE_SENSOR )
 #endif //CONFIG_SOFTWARE_EXTERNAL_6DIGIT_DISPLAY_SUPPORT
 
 #if CONFIG_MEASURE_OPERATION_VOLTAGE_SUPPORT
@@ -1509,7 +1634,7 @@ void app_main(void)
 
 #if CONFIG_SOFTWARE_EXTERNAL_6DIGIT_DISPLAY_SUPPORT
     // DIGIT DISPLAY
-    xTaskCreatePinnedToCore(&vDigitDisplayTask, "vDigitDisplayTask", 4096 * 1, NULL, 2, &xDigitDisplay, TASK_CORE);
+//    xTaskCreatePinnedToCore(&vDigitDisplayTask, "vDigitDisplayTask", 4096 * 1, NULL, 2, &xDigitDisplay, TASK_CORE);
 #endif //CONFIG_SOFTWARE_EXTERNAL_6DIGIT_DISPLAY_SUPPORT
 
 #if CONFIG_MEASURE_OPERATION_VOLTAGE_SUPPORT

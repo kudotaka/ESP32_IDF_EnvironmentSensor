@@ -14,7 +14,8 @@
 /* ===================================================================================================*/
 /* --------------------------------------------- SK6812 ----------------------------------------------*/
 
-esp_err_t Sk6812_Init(gpio_num_t pin, rmt_channel_handle_t *channel, rmt_encoder_handle_t *encoder) {
+esp_err_t Sk6812_Init(gpio_num_t pin, rmt_channel_handle_t *channel, rmt_encoder_handle_t *encoder)
+{
 	esp_err_t res = ESP_OK;
     rmt_tx_channel_config_t tx_chan_config = {                                                
         .clk_src = RMT_CLK_SRC_DEFAULT, // select source clock
@@ -39,7 +40,8 @@ esp_err_t Sk6812_Init(gpio_num_t pin, rmt_channel_handle_t *channel, rmt_encoder
 	return res;
 }
 
-esp_err_t Sk6812_Init_Ex(pixel_settings_t *px, uint8_t pixelCount, gpio_num_t pin, rmt_channel_handle_t *channel, rmt_encoder_handle_t *encoder) {
+esp_err_t Sk6812_Init_Ex(pixel_settings_t *px, uint8_t pixelCount, gpio_num_t pin, rmt_channel_handle_t *channel, rmt_encoder_handle_t *encoder)
+{
 	px->pixel_count = pixelCount;
 	px->brightness = 10;
 	sprintf(px->color_order, "GRBW");
@@ -119,13 +121,20 @@ esp_err_t Sk6812_Clear(rmt_channel_handle_t channel, rmt_encoder_handle_t encode
 	return res;
 }
 
-esp_err_t Sk6812_Show_Ex(pixel_settings_t *px, rmt_channel_handle_t channel, rmt_encoder_handle_t encoder) {
+esp_err_t Sk6812_Show_Ex(pixel_settings_t *px, rmt_channel_handle_t channel, rmt_encoder_handle_t encoder)
+{
 	return Sk6812_Show(channel, encoder, px->pixels, (px->nbits / 8) * px->pixel_count);
 }
 
-esp_err_t Sk6812_Clear_Ex(pixel_settings_t *px, rmt_channel_handle_t channel, rmt_encoder_handle_t encoder) {
+esp_err_t Sk6812_Clear_Ex(pixel_settings_t *px, rmt_channel_handle_t channel, rmt_encoder_handle_t encoder)
+{
 	memset(px->pixels, 0, (px->nbits / 8) * px->pixel_count);
 	return Sk6812_Clear(channel, encoder, px->pixels, (px->nbits / 8) * px->pixel_count);
+}
+
+void Sk6812_SetColorFromGRBW_Ex(pixel_settings_t *px, uint16_t pos, uint8_t g, uint8_t r, uint8_t b, uint8_t w)
+{
+	np_set_pixel_color_fromGRBW(px, pos, g, r, b, w);
 }
 
 /* ----------------------------------------------- End -----------------------------------------------*/
@@ -133,7 +142,8 @@ esp_err_t Sk6812_Clear_Ex(pixel_settings_t *px, rmt_channel_handle_t channel, rm
 
 // Get color value of RGB component
 //---------------------------------------------------
-static uint8_t offset_color_withBrightness(char o, uint32_t color, uint8_t brightness) {
+static uint8_t offset_color_withBrightness(char o, uint32_t color, uint8_t brightness)
+{
 	float _brightness = (float)((float)brightness / 255.0);
 	uint8_t clr = 0;
 	switch(o) {
@@ -157,10 +167,21 @@ static uint8_t offset_color_withBrightness(char o, uint32_t color, uint8_t brigh
 
 // Set pixel color at buffer position from RGB color value
 //=========================================================================
-void np_set_pixel_color(pixel_settings_t *px, uint16_t idx, uint32_t color) {
+void np_set_pixel_color(pixel_settings_t *px, uint16_t idx, uint32_t color)
+{
 	uint16_t ofs = idx * (px->nbits / 8);
 	px->pixels[ofs] = offset_color_withBrightness(px->color_order[0], color, px->brightness);
 	px->pixels[ofs+1] = offset_color_withBrightness(px->color_order[1], color, px->brightness);
 	px->pixels[ofs+2] = offset_color_withBrightness(px->color_order[2], color, px->brightness);
 	if (px->nbits == 32) px->pixels[ofs+3] = offset_color_withBrightness(px->color_order[3], color, px->brightness);
+}
+
+void np_set_pixel_color_fromGRBW(pixel_settings_t *px, uint16_t idx, uint8_t g, uint8_t r, uint8_t b, uint8_t w)
+{
+	float _brightness = (float)((float)px->brightness / 255.0);
+	uint16_t ofs = idx * (px->nbits / 8);
+	px->pixels[ofs] = (uint8_t)(g * _brightness);
+	px->pixels[ofs+1] = (uint8_t)(r * _brightness);
+	px->pixels[ofs+2] = (uint8_t)(b * _brightness);
+	if (px->nbits == 32) px->pixels[ofs+3] = (uint8_t)(w * _brightness);
 }

@@ -125,7 +125,7 @@ menu "My DevBoard software config"
         int "wakeup time (sec)"
         default 20
 
-        config DEEP_SLEEP_GPIO_WAKEUP
+    config DEEP_SLEEP_GPIO_WAKEUP
         bool "Enable wakeup from GPIO"
         default y
         depends on SOC_GPIO_SUPPORT_DEEPSLEEP_WAKEUP
@@ -175,6 +175,16 @@ menu "My DevUnit config"
     config SOFTWARE_EXTERNAL_LED_SUPPORT
         bool "LED-Hardware [External]"
         default n
+    choice SOFTWARE_EXTERNAL_LED_MODE
+        prompt "LED Mode"
+        depends on SOFTWARE_EXTERNAL_LED_SUPPORT
+        default SOFTWARE_EXTERNAL_LED_MODE_LEDC
+
+        config SOFTWARE_EXTERNAL_LED_MODE_LEDC
+            bool "LEDC"
+        config SOFTWARE_EXTERNAL_LED_MODE_GPIO
+            bool "GPIO"
+    endchoice
     config SOFTWARE_EXTERNAL_6DIGIT_DISPLAY_SUPPORT
         bool "6DIGIT Display-Hardware [External]"
         default n

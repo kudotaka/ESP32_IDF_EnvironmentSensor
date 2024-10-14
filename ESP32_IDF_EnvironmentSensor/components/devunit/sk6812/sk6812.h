@@ -37,5 +37,7 @@ esp_err_t Sk6812_Clear_Ex(pixel_settings_t *px, rmt_channel_handle_t channel, rm
 void Sk6812_SetColor_Ex(pixel_settings_t *px, uint16_t pos, uint32_t color);
 void Sk6812_SetAllColor_Ex(pixel_settings_t *px, uint32_t color);
 void Sk6812_SetBrightness_Ex(pixel_settings_t *px, uint8_t brightness);
+void Sk6812_SetColorFromGRBW_Ex(pixel_settings_t *px, uint16_t pos, uint8_t g, uint8_t r, uint8_t b, uint8_t w);
 
 void np_set_pixel_color(pixel_settings_t *px, uint16_t idx, uint32_t color);
+void np_set_pixel_color_fromGRBW(pixel_settings_t *px, uint16_t idx, uint8_t g, uint8_t r, uint8_t b, uint8_t w);
