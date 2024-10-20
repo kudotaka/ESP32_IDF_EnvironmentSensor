@@ -2,6 +2,9 @@
 set(COMPONENT_ADD_INCLUDEDIRS .)
 set(COMPONENT_REQUIRES "driver" "esp_wifi" "nvs_flash" "esp_https_ota" "esp_event" "mbedtls" "esp_driver_i2c" "esp_driver_gpio" "esp_adc")
 
+list(APPEND COMPONENT_SRCDIRS mysystem)
+list(APPEND COMPONENT_ADD_INCLUDEDIRS mysystem)
+
 if(CONFIG_SOFTWARE_INTERNAL_WIFI_SUPPORT)
     list(APPEND COMPONENT_SRCDIRS wifi)
     list(APPEND COMPONENT_ADD_INCLUDEDIRS wifi)
