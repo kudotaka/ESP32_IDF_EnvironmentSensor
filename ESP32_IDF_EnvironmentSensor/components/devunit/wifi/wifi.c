@@ -96,6 +96,14 @@ void wifi_init_sta(void)
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+
+    char newHostname[20] = "";
+    createHostnameFromChipAndMacAddress(newHostname, sizeof(newHostname)/sizeof(char));
+    ESP_ERROR_CHECK(esp_netif_set_hostname(netif, newHostname));
+    const char* hostname;
+    ESP_ERROR_CHECK(esp_netif_get_hostname(netif, &hostname));
+    ESP_LOGI(TAG, "hostname: %s", hostname);
+
     esp_event_handler_instance_t instance_any_id;
     esp_event_handler_instance_t instance_got_ip;
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT,
@@ -125,14 +133,14 @@ void wifi_init_sta(void)
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config) );
     ESP_ERROR_CHECK(esp_wifi_start() );
     ESP_LOGI(TAG, "wifi_init_sta finished.");
-
+/*
     char newHostname[20] = "";
     createHostnameFromChipAndMacAddress(newHostname, sizeof(newHostname)/sizeof(char));
     ESP_ERROR_CHECK(esp_netif_set_hostname(netif, newHostname));
     const char* hostname;
     ESP_ERROR_CHECK(esp_netif_get_hostname(netif, &hostname));
     ESP_LOGI(TAG, "hostname: %s", hostname);
-
+*/
     // Waiting until either the connection is established (WIFI_CONNECTED_BIT) or connection failed for the maximum
     // number of re-tries (WIFI_FAIL_BIT). The bits are set by event_handler() (see above)
     EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group,
