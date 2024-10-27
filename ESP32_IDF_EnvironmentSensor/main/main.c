@@ -81,6 +81,7 @@
     || CONFIG_SOFTWARE_EXTERNAL_SK6812_SUPPORT \
     || CONFIG_SOFTWARE_EXTERNAL_RTC_SUPPORT \
     || CONFIG_SOFTWARE_EXTERNAL_BUTTON_SUPPORT \
+    || CONFIG_SOFTWARE_EXTERNAL_HT16K33_SUPPORT \
     || CONFIG_SOFTWARE_EXTERNAL_LED_SUPPORT )
 #include "devunit.h"
 #endif
@@ -121,6 +122,10 @@ static int g_voltage;
 static bool adc_calibration_init(adc_unit_t unit, adc_channel_t channel, adc_atten_t atten, adc_cali_handle_t *out_handle);
 static void adc_calibration_deinit(adc_cali_handle_t handle);
 #endif //CONFIG_MEASURE_OPERATION_VOLTAGE_SUPPORT
+
+#if CONFIG_SOFTWARE_EXTERNAL_HT16K33_SUPPORT
+void SevenSegInit(void);
+#endif //CONFIG_SOFTWARE_EXTERNAL_HT16K33_SUPPORT
 
 
 #if CONFIG_SOFTWARE_INTERNAL_BUTTON_SUPPORT
@@ -357,6 +362,19 @@ void vExternal_i2c_task(void *pvParametes)
         ESP_LOGE(TAG, "PCF8563_Init Error");
     }
 #endif
+
+#if CONFIG_SOFTWARE_EXTERNAL_HT16K33_SUPPORT
+    ret = HT16K33_Init(i2c0_master_bus_handle);
+    if (ret == ESP_OK) {
+        ESP_LOGD(TAG, "HT16K33_Init() is OK!");
+
+        SevenSegInit();
+    }
+    else
+    {
+        ESP_LOGE(TAG, "HT16K33_Init Error");
+    }
+#endif //CONFIG_SOFTWARE_EXTERNAL_HT16K33_SUPPORT
 
     while (1) {
 #if CONFIG_SOFTWARE_SENSOR_ADT7410
@@ -710,6 +728,24 @@ void vClock_task(void *pvParametes)
 }
 #endif //CONFIG_SOFTWARE_EXTERNAL_RTC_SUPPORT
 
+#if CONFIG_SOFTWARE_EXTERNAL_HT16K33_SUPPORT
+void vSevenSeg_task(void *pvParametes)
+{
+    ESP_LOGD(TAG, "start 7seg");
+ 
+
+    while (1) {
+        HT16K33_ShowTest();
+
+        vTaskDelay( pdMS_TO_TICKS(1000) );
+    }
+}
+
+void SevenSegInit()
+{
+    xTaskCreate(vSevenSeg_task, "vSevenSeg_task", 4096 * 1, NULL, 10, NULL);
+}
+#endif //CONFIG_SOFTWARE_EXTERNAL_HT16K33_SUPPORT
 
 #if CONFIG_SOFTWARE_SENSOR_USE_SENSOR
 #if (CONFIG_SOFTWARE_ESP_MQTT_SUPPORT != 1)
@@ -1548,6 +1584,7 @@ void vMeasureOperationVoltageTask(void *pvParametes)
 }
 #endif //CONFIG_MEASURE_OPERATION_VOLTAGE_SUPPORT
 
+
 ////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////
 void app_main(void)
@@ -1556,6 +1593,7 @@ void app_main(void)
     esp_log_level_set("*", ESP_LOG_ERROR);
     esp_log_level_set("MY-MAIN", ESP_LOG_DEBUG);
     esp_log_level_set("MY-WIFI", ESP_LOG_INFO);
+    esp_log_level_set("MY-HT16K33", ESP_LOG_INFO);
 
 
 #if CONFIG_SOFTWARE_UI_SUPPORT

@@ -209,7 +209,11 @@ menu "My DevUnit config"
     config SOFTWARE_EXTERNAL_UART_SUPPORT
         bool "UART-Hardware [External]"
         default n
-
+    config SOFTWARE_EXTERNAL_HT16K33_SUPPORT
+        bool "HT16K33-Hardware [External]"
+        select SOFTWARE_EXTERNAL_I2C_SUPPORT
+        default n
+    
     menu "Sensor config"
         config SOFTWARE_SENSOR_SHT3X
             bool "SENSOR SHT3X"
