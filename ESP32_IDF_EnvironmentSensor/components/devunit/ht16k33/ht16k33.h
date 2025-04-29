@@ -34,11 +34,15 @@
 #define HT16K33_SEG_L2  (0x02)
 #define HT16K33_SEG_L3  (0x04)
 
+#define HT16K33_COM_FIRST_HALF    (0x00)
+#define HT16K33_COM_SECOND_HALF   (0x01)
+
 esp_err_t HT16K33_Init(i2c_master_bus_handle_t i2c_master_bus_handle);
 esp_err_t HT16K33_DeInit();
 esp_err_t HT16K33_SetBrigtness(uint8_t b);
 esp_err_t HT16K33_DisplayClear();
 esp_err_t HT16K33_DisplayFromRawData(uint8_t com, uint8_t raw1, uint8_t raw2);
+esp_err_t HT16K33_DisplayFromRawDataAt1Byte(uint8_t com, uint8_t half, uint8_t raw1);
 esp_err_t HT16K33_ParseFloatToDigit2Point1(float value, uint8_t segments_data[], uint8_t size);
 esp_err_t HT16K33_ParseTimeToDigitClockAndPulse(uint8_t hour, uint8_t minute, uint8_t second, uint8_t segments_data[], uint8_t size);
 

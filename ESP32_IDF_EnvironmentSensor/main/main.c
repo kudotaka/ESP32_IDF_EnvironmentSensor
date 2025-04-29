@@ -64,6 +64,12 @@
 #define LEDC_FADE_TIME    (2500)
 #endif // CONFIG_SOFTWARE_EXTERNAL_LED_SUPPORT
 
+#if CONFIG_HTTPS_OTA_SUPPORT
+#include "esp_ota_ops.h"
+#include "esp_https_ota.h"
+#include "esp_crt_bundle.h"
+#endif //CONFIG_HTTPS_OTA_SUPPORT
+
 #if (  CONFIG_SOFTWARE_INTERNAL_WIFI_SUPPORT \
     || CONFIG_SOFTWARE_INTERNAL_BUTTON_SUPPORT \
     || CONFIG_SOFTWARE_EXTERNAL_SK6812_SUPPORT \
@@ -368,7 +374,7 @@ void vExternal_i2c_task(void *pvParametes)
     if (ret == ESP_OK) {
         ESP_LOGD(TAG, "HT16K33_Init() is OK!");
 
-        SevenSegInit();
+//        SevenSegInit();
     }
     else
     {
@@ -527,6 +533,10 @@ static void gpio_clock_task(void* arg)
         ESP_LOGE(TAG, "Digit Display Tm1637_Enable Error");
     }
 #endif //CONFIG_SOFTWARE_EXTERNAL_6DIGIT_DISPLAY_SUPPORT
+#if CONFIG_SOFTWARE_EXTERNAL_HT16K33_SUPPORT
+        bool bHt16K33Init = true;
+        bool bFitst = true;
+#endif //CONFIG_SOFTWARE_EXTERNAL_HT16K33_SUPPORT
 
     uint32_t io_num;
     for (;;) {
@@ -555,10 +565,57 @@ static void gpio_clock_task(void* arg)
             else
             {
 #endif //CONFIG_SOFTWARE_EXTERNAL_6DIGIT_DISPLAY_SUPPORT
+#if CONFIG_SOFTWARE_EXTERNAL_HT16K33_SUPPORT
+            if (bHt16K33Init == true)
+            {
+//                uint8_t parseArray[3] = { 0 };
+//                HT16K33_ParseFloatToDigit2Point1(g_temperature, parseArray, 3);
+//                HT16K33_DisplayFromRawDataAt1Byte(HT16K33_COM0, HT16K33_COM_SECOND_HALF, parseArray[0]);
+//                HT16K33_DisplayFromRawDataAt1Byte(HT16K33_COM1, HT16K33_COM_SECOND_HALF, parseArray[1]);
+//                HT16K33_DisplayFromRawDataAt1Byte(HT16K33_COM2, HT16K33_COM_SECOND_HALF, parseArray[2]);
+                uint8_t clockArray[5] = { 0 };
+                HT16K33_ParseTimeToDigitClockAndPulse(rtcdate.hour, rtcdate.minute, rtcdate.second, clockArray, sizeof(clockArray)/sizeof(uint8_t));
+/*
+                HT16K33_DisplayFromRawData(HT16K33_COM0, clockArray[0], parseArray[0]);
+                HT16K33_DisplayFromRawData(HT16K33_COM1, clockArray[1], parseArray[1]);
+                HT16K33_DisplayFromRawData(HT16K33_COM2, clockArray[2], parseArray[2]);
+                HT16K33_DisplayFromRawData(HT16K33_COM3, clockArray[3], convertCharToSegments(' '));
+                if (clockArray[4] == 0)
+                {
+                    HT16K33_DisplayFromRawData(HT16K33_COM4, convertCharToSegments(' '), convertCharToSegments(' '));
+                }
+                else
+                {
+                    HT16K33_DisplayFromRawData(HT16K33_COM4, convertCharToSegments(':'), convertCharToSegments(' '));
+                }
+*/
+                if (bFitst)
+                {
+                    HT16K33_DisplayFromRawDataAt1Byte(HT16K33_COM0, HT16K33_COM_FIRST_HALF, clockArray[0]);
+                    HT16K33_DisplayFromRawDataAt1Byte(HT16K33_COM1, HT16K33_COM_FIRST_HALF, clockArray[1]);
+                    HT16K33_DisplayFromRawDataAt1Byte(HT16K33_COM2, HT16K33_COM_FIRST_HALF, clockArray[2]);
+                    HT16K33_DisplayFromRawDataAt1Byte(HT16K33_COM3, HT16K33_COM_FIRST_HALF, clockArray[3]);
+                    bFitst = false;
+                }
+                if (clockArray[4] == 0)
+                {
+                    HT16K33_DisplayFromRawDataAt1Byte(HT16K33_COM4, HT16K33_COM_FIRST_HALF, convertCharToSegments(' '));
+                }
+                else
+                {
+                    HT16K33_DisplayFromRawDataAt1Byte(HT16K33_COM4, HT16K33_COM_FIRST_HALF, convertCharToSegments(':'));
+                }
+            }
+            else
+            {
+#endif //CONFIG_SOFTWARE_EXTERNAL_HT16K33_SUPPORT
                 ESP_LOGI(TAG, "%04d/%02d/%02d %02d:%02d:%02d", rtcdate.year, rtcdate.month, rtcdate.day, rtcdate.hour, rtcdate.minute, rtcdate.second);
 #if CONFIG_SOFTWARE_EXTERNAL_6DIGIT_DISPLAY_SUPPORT
             }
 #endif //CONFIG_SOFTWARE_EXTERNAL_6DIGIT_DISPLAY_SUPPORT
+#if CONFIG_SOFTWARE_EXTERNAL_HT16K33_SUPPORT
+            }
+#endif //CONFIG_SOFTWARE_EXTERNAL_HT16K33_SUPPORT
         }
     }
 }
@@ -1070,7 +1127,7 @@ void vExternal_RGBLedBlink_task(void *pvParametes)
 
 #if CONFIG_HTTPS_OTA_SUPPORT
 TaskHandle_t xHttpsOta;
-/*
+
 static void event_handler(void* arg, esp_event_base_t event_base,
                         int32_t event_id, void* event_data)
 {
@@ -1106,7 +1163,7 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         }
     }
 }
-*/
+
 
 esp_err_t do_firmware_upgrade()
 {
@@ -1129,6 +1186,8 @@ esp_err_t do_firmware_upgrade()
 
 static void vHttpsOta_task(void* pvParameters) {
     ESP_LOGI(TAG, "start HTTPS OTA");
+
+    ESP_ERROR_CHECK(esp_event_handler_register(ESP_HTTPS_OTA_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));
 
     while(1){
         ESP_LOGI(TAG, "do_firmware_upgrade()");

@@ -84,6 +84,13 @@ esp_err_t HT16K33_DisplayFromRawData(uint8_t com, uint8_t raw1, uint8_t raw2)
     return I2CWriteWithAddr(0x00 | com * 2, cmd, 2);
 }
 
+esp_err_t HT16K33_DisplayFromRawDataAt1Byte(uint8_t com, uint8_t half, uint8_t raw1)
+{
+    uint8_t cmd[] = { 0 };
+    cmd[0] = raw1;
+    return I2CWriteWithAddr(0x00 | com * 2 | half, cmd, 1);
+}
+
 esp_err_t HT16K33_ParseFloatToDigit2Point1(float value, uint8_t segments_data[], uint8_t size)
 {
     if ( size < 3)
