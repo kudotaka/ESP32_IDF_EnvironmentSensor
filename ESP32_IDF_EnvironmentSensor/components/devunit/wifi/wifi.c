@@ -157,6 +157,10 @@ void wifi_init_sta(void)
     } else {
         ESP_LOGE(TAG, "UNEXPECTED EVENT");
     }
+
+    esp_netif_dns_info_t dns = {0};
+    ESP_ERROR_CHECK(esp_netif_get_dns_info(netif, ESP_NETIF_DNS_MAIN, &dns) );
+    ESP_LOGI(TAG, "DNS_MAIN:" IPSTR, IP2STR(&dns.ip.u_addr.ip4));
 }
 
 void wifi_initialise(void)

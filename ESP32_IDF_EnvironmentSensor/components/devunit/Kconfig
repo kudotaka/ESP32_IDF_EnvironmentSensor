@@ -6,6 +6,10 @@ menu "My DevBoard hardware config"
         bool "ESP MQTT"
         depends on SOFTWARE_INTERNAL_WIFI_SUPPORT
         default n
+    config SOFTWARE_ESP_HTTP_CLIENT_SUPPORT
+        bool "PUSHGATEWAY"
+        depends on SOFTWARE_INTERNAL_WIFI_SUPPORT
+        default n
     config SOFTWARE_INTERNAL_BUTTON_SUPPORT
         bool "BUTTON-Hardware [Internal]"
         default n
@@ -150,6 +154,19 @@ menu "My DevBoard software config"
                 This option set the gpio wake-up trigger signal, In deep sleep, only high or low level wake-up is
                 supported. If this option is enabled, it is a high level wake up, otherwise it is a low level wake up.
     endmenu
+
+    config PUSHGATEWAY_HTTP_HOST
+        string "PushGateway HOST"
+        default "pushgateway.internal"
+#    config PUSHGATEWAY_HTTP_URL
+#        string "PushGateway URL"
+#        default "http://XXX.XXX.XXX.XXX"
+    config PUSHGATEWAY_HTTP_PORT
+        int "PushGateway PORT"
+        default 9091
+    config PUSHGATEWAY_METRIC_URL
+        string "PushGateway Metric Url"
+        default "/metrics/job/env/instance/eps32-2"
 
     config MEASURE_OPERATION_VOLTAGE_SUPPORT
         bool "Measure Operation Voltage"

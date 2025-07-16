@@ -14,6 +14,17 @@
 #endif //CONFIG_SOFTWARE_ESP_MQTT_SUPPORT
 #endif //CONFIG_SOFTWARE_INTERNAL_WIFI_SUPPORT
 
+#if CONFIG_SOFTWARE_ESP_HTTP_CLIENT_SUPPORT
+#include "esp_http_client.h"
+
+#ifndef MIN
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#endif
+
+#define MAX_HTTP_RECV_BUFFER 512
+#define MAX_HTTP_OUTPUT_BUFFER 2048
+#endif //CONFIG_SOFTWARE_ESP_HTTP_CLIENT_SUPPORT
+
 #if CONFIG_SOFTWARE_EXTERNAL_RTC_SUPPORT
 #include "driver/gpio.h"
 #include "esp_sntp.h"
@@ -95,7 +106,7 @@
 static const char *TAG = "MY-MAIN";
 
 
-#if ( CONFIG_SOFTWARE_ESP_MQTT_SUPPORT || CONFIG_SOFTWARE_SENSOR_USE_SENSOR )
+#if (  CONFIG_SOFTWARE_ESP_HTTP_CLIENT_SUPPORT || CONFIG_SOFTWARE_ESP_MQTT_SUPPORT || CONFIG_SOFTWARE_SENSOR_USE_SENSOR )
 int8_t g_sensor_mode = 0;
 float g_temperature = 0.0;
 float g_humidity = 0.0;
@@ -103,7 +114,7 @@ float g_pressure = 0.0;
 int g_co2 = 0;
 uint16_t g_lux = 0;
 uint8_t g_loopCount = 0;
-#endif //CONFIG_SOFTWARE_SENSOR_USE_SENSOR
+#endif // CONFIG_SOFTWARE_ESP_HTTP_CLIENT_SUPPORT || CONFIG_SOFTWARE_ESP_MQTT_SUPPORT || CONFIG_SOFTWARE_SENSOR_USE_SENSOR
 
 #if CONFIG_SOFTWARE_EXTERNAL_RTC_SUPPORT
 void RtcInterruptInit(void);
@@ -1643,6 +1654,269 @@ void vMeasureOperationVoltageTask(void *pvParametes)
 }
 #endif //CONFIG_MEASURE_OPERATION_VOLTAGE_SUPPORT
 
+#if CONFIG_SOFTWARE_ESP_HTTP_CLIENT_SUPPORT
+esp_http_client_handle_t espHttpClient = NULL;
+esp_err_t _http_event_handler(esp_http_client_event_t *evt)
+{
+    static char *output_buffer;  // Buffer to store response of http request from event handler
+    static int output_len;       // Stores number of bytes read
+    switch(evt->event_id) {
+        case HTTP_EVENT_ERROR:
+            ESP_LOGD(TAG, "HTTP_EVENT_ERROR");
+            break;
+        case HTTP_EVENT_ON_CONNECTED:
+            ESP_LOGD(TAG, "HTTP_EVENT_ON_CONNECTED");
+            break;
+        case HTTP_EVENT_HEADER_SENT:
+            ESP_LOGD(TAG, "HTTP_EVENT_HEADER_SENT");
+            break;
+        case HTTP_EVENT_ON_HEADER:
+            ESP_LOGD(TAG, "HTTP_EVENT_ON_HEADER, key=%s, value=%s", evt->header_key, evt->header_value);
+            break;
+        case HTTP_EVENT_ON_DATA:
+            ESP_LOGD(TAG, "HTTP_EVENT_ON_DATA, len=%d", evt->data_len);
+            // Clean the buffer in case of a new request
+            if (output_len == 0 && evt->user_data) {
+                // we are just starting to copy the output data into the use
+                memset(evt->user_data, 0, MAX_HTTP_OUTPUT_BUFFER);
+            }
+            /*
+             *  Check for chunked encoding is added as the URL for chunked encoding used in this example returns binary data.
+             *  However, event handler can also be used in case chunked encoding is used.
+             */
+            if (!esp_http_client_is_chunked_response(evt->client)) {
+                // If user_data buffer is configured, copy the response into the buffer
+                int copy_len = 0;
+                if (evt->user_data) {
+                    // The last byte in evt->user_data is kept for the NULL character in case of out-of-bound access.
+                    copy_len = MIN(evt->data_len, (MAX_HTTP_OUTPUT_BUFFER - output_len));
+                    if (copy_len) {
+                        memcpy(evt->user_data + output_len, evt->data, copy_len);
+                    }
+                } else {
+                    int content_len = esp_http_client_get_content_length(evt->client);
+                    if (output_buffer == NULL) {
+                        // We initialize output_buffer with 0 because it is used by strlen() and similar functions therefore should be null terminated.
+                        output_buffer = (char *) calloc(content_len + 1, sizeof(char));
+                        output_len = 0;
+                        if (output_buffer == NULL) {
+                            ESP_LOGE(TAG, "Failed to allocate memory for output buffer");
+                            return ESP_FAIL;
+                        }
+                    }
+                    copy_len = MIN(evt->data_len, (content_len - output_len));
+                    if (copy_len) {
+                        memcpy(output_buffer + output_len, evt->data, copy_len);
+                    }
+                }
+                output_len += copy_len;
+            }
+
+            break;
+        case HTTP_EVENT_ON_FINISH:
+            ESP_LOGD(TAG, "HTTP_EVENT_ON_FINISH");
+            if (output_buffer != NULL) {
+#if CONFIG_EXAMPLE_ENABLE_RESPONSE_BUFFER_DUMP
+                ESP_LOG_BUFFER_HEX(TAG, output_buffer, output_len);
+#endif
+                free(output_buffer);
+                output_buffer = NULL;
+            }
+            output_len = 0;
+            break;
+        case HTTP_EVENT_DISCONNECTED:
+            ESP_LOGI(TAG, "HTTP_EVENT_DISCONNECTED");
+            esp_err_t err = esp_http_client_get_errno((esp_http_client_handle_t)evt->client);
+            if (err != 0) {
+                ESP_LOGI(TAG, "Last esp error code: 0x%x", err);
+            }
+            if (output_buffer != NULL) {
+                free(output_buffer);
+                output_buffer = NULL;
+            }
+            output_len = 0;
+            break;
+        case HTTP_EVENT_REDIRECT:
+            ESP_LOGD(TAG, "HTTP_EVENT_REDIRECT");
+            esp_http_client_set_header(evt->client, "From", "user@example.com");
+            esp_http_client_set_header(evt->client, "Accept", "text/html");
+            esp_http_client_set_redirection(evt->client);
+            break;
+    }
+    return ESP_OK;
+}
+
+static void pushgateway_app_start(void)
+{
+    esp_http_client_config_t config = {
+        .host = CONFIG_PUSHGATEWAY_HTTP_HOST,
+        .port = CONFIG_PUSHGATEWAY_HTTP_PORT,
+        .path = CONFIG_PUSHGATEWAY_METRIC_URL,
+        .event_handler = _http_event_handler,
+        .transport_type = HTTP_TRANSPORT_OVER_TCP,
+        .disable_auto_redirect = true,
+    };
+
+    ESP_LOGI(TAG, "host:%s path:%s port:%d", config.host, config.path, config.port);
+    espHttpClient = esp_http_client_init(&config);
+    if (espHttpClient == NULL) {
+        ESP_LOGE(TAG, "esp_http_client_init() is error.");
+        return;
+    }
+}
+
+static void pushgateway_app_stop(void)
+{
+    ESP_ERROR_CHECK(esp_http_client_cleanup(espHttpClient));
+    if (espHttpClient != NULL) {
+        espHttpClient = NULL;
+    }
+}
+
+void pushgateway_main()
+{
+    // connected wifi
+    if (wifi_isConnected() != ESP_OK) {
+        return;
+    }
+    if (espHttpClient == NULL) {
+        pushgateway_app_start();
+    }
+
+    esp_err_t err = ESP_OK;
+    char dataMessage[256] = {0};
+    ESP_LOGD(TAG, "SENSOR mode %d", g_sensor_mode);
+
+    switch (g_sensor_mode)
+    {
+    case 1:
+        sprintf(dataMessage, "# TYPE temperature\ntemperature %4.1f\n", g_temperature);
+        break;
+    case 2:
+        sprintf(dataMessage, "# TYPE humidity\nhumidity %4.1f\n", g_humidity);
+        break;
+    case 3:
+        sprintf(dataMessage, "# TYPE temperature\ntemperature %4.1f\n# TYPE humidity\nhumidity %4.1f\n}", g_temperature, g_humidity);
+        break;
+    case 4:
+        sprintf(dataMessage, "# TYPE pressure\npressure %4.1f\n", g_pressure);
+        break;
+    case 5:
+        sprintf(dataMessage, "# TYPE temperature\ntemperature %4.1f\n# TYPE pressure\npressure %4.1f\n", g_temperature, g_pressure);
+        break;
+    case 6:
+        sprintf(dataMessage, "# TYPE humidity\nhumidity %4.1f\n# TYPE pressure\npressure %4.1f\n", g_humidity, g_pressure);
+        break;
+    case 7:
+        sprintf(dataMessage, "# TYPE temperature\ntemperature %4.1f\n# TYPE humidity\nhumidity %4.1f\n# TYPE pressure\npressure %4.1f\n", g_temperature, g_humidity, g_pressure);
+        break;
+    case 8:
+        sprintf(dataMessage, "# TYPE co2\nco2 %4d\n", g_co2);
+        break;
+    case 9:
+        sprintf(dataMessage, "# TYPE temperature\ntemperature %4.1f\n# TYPE co2\nco2 %4d\n", g_temperature, g_co2);
+        break;
+    case 10:
+        sprintf(dataMessage, "# TYPE humidity\nhumidity %4.1f\n# TYPE co2\nco2 %4d\n", g_humidity, g_co2);
+        break;
+    case 11:
+        sprintf(dataMessage, "# TYPE temperature\ntemperature %4.1f\n# TYPE humidity\nhumidity %4.1f\n# TYPE co2\nco2 %4d\n", g_temperature, g_humidity, g_co2);
+        break;
+    case 12:
+        sprintf(dataMessage, "# TYPE pressure\npressure %4.1f\n# TYPE co2\nco2 %4d\n", g_pressure, g_co2);
+        break;
+    case 13:
+        sprintf(dataMessage, "# TYPE temperature\ntemperature %4.1f\n# TYPE pressure\npressure %4.1f\n# TYPE co2\nco2 %4d\n", g_temperature, g_pressure, g_co2);
+        break;
+    case 14:
+        sprintf(dataMessage, "# TYPE humidity\nhumidity %4.1f\n# TYPE pressure\npressure %4.1f\n# TYPE co2\nco2 %4d\n", g_humidity, g_pressure, g_co2);
+        break;
+    case 15:
+        sprintf(dataMessage, "# TYPE temperature\ntemperature %4.1f\n# TYPE humidity\nhumidity %4.1f\n# TYPE pressure\npressure %4.1f\n# TYPE co2\nco2 %4d\n", g_temperature, g_humidity, g_pressure, g_co2);
+        break;
+    case 16:
+        sprintf(dataMessage, "# TYPE lux\nlux %5u\n", g_lux);
+        break;
+    case 17:
+        sprintf(dataMessage, "# TYPE temperature\ntemperature %4.1f\n# TYPE lux\nlux %5u\n", g_temperature, g_lux);
+        break;
+    case 18:
+        sprintf(dataMessage, "# TYPE humidity\nhumidity %4.1f\n# TYPE lux\nlux %5u\n", g_humidity, g_lux);
+        break;
+    case 19:
+        sprintf(dataMessage, "# TYPE temperature\ntemperature %4.1f\n# TYPE humidity\nhumidity %4.1f\n# TYPE lux\nlux %5u\n", g_temperature, g_humidity, g_lux);
+        break;
+    case 20:
+        sprintf(dataMessage, "# TYPE pressure\npressure %4.1f\n# TYPE lux\nlux %5u\n", g_pressure, g_lux);
+        break;
+    case 21:
+        sprintf(dataMessage, "# TYPE temperature\ntemperature %4.1f\n# TYPE pressure\npressure %4.1f\n# TYPE lux\nlux %5u\n", g_temperature, g_pressure, g_lux);
+        break;
+    case 22:
+        sprintf(dataMessage, "# TYPE humidity\nhumidity %4.1f\n# TYPE pressure\npressure %4.1f\n# TYPE lux\nlux %5u\n", g_humidity, g_pressure, g_lux);
+        break;
+    case 23:
+        sprintf(dataMessage, "# TYPE temperature\ntemperature %4.1f\n# TYPE humidity\nhumidity %4.1f\n# TYPE pressure\npressure %4.1f\n# TYPE lux\nlux %5u\n", g_temperature, g_humidity, g_pressure, g_lux);
+        break;
+    case 24:
+        sprintf(dataMessage, "# TYPE co2\nco2 %4d\n# TYPE lux\nlux %5u\n", g_co2, g_lux);
+        break;
+    case 25:
+        sprintf(dataMessage, "# TYPE temperature\ntemperature %4.1f\n# TYPE co2\nco2 %4d\n# TYPE lux\nlux %5u\n", g_temperature, g_co2, g_lux);
+        break;
+    case 26:
+        sprintf(dataMessage, "# TYPE humidity\nhumidity %4.1f\n# TYPE co2\nco2 %4d\n# TYPE lux\nlux %5u\n", g_humidity, g_co2, g_lux);
+        break;
+    case 27:
+        sprintf(dataMessage, "# TYPE temperature\ntemperature %4.1f\n# TYPE humidity\nhumidity %4.1f\n# TYPE co2\nco2 %4d\n# TYPE lux\nlux %5u\n", g_temperature, g_humidity, g_co2, g_lux);
+        break;
+    case 28:
+        sprintf(dataMessage, "# TYPE pressure\npressure %4.1f\n# TYPE co2\nco2 %4d\n# TYPE lux\nlux %5u\n", g_pressure, g_co2, g_lux);
+        break;
+    case 29:
+        sprintf(dataMessage, "# TYPE temperature\ntemperature %4.1f\n# TYPE pressure\npressure %4.1f\n# TYPE co2\nco2 %4d\n# TYPE lux\nlux %5u\n", g_temperature, g_pressure, g_co2, g_lux);
+        break;
+    case 30:
+        sprintf(dataMessage, "# TYPE humidity\nhumidity %4.1f\n# TYPE pressure\npressure %4.1f\n# TYPE co2\nco2 %4d\n# TYPE lux\nlux %5u\n", g_humidity, g_pressure, g_co2, g_lux);
+        break;
+    case 31:
+        sprintf(dataMessage, "# TYPE temperature\ntemperature %4.1f\n# TYPE humidity\nhumidity %4.1f\n# TYPE pressure\npressure %4.1f\n# TYPE co2\nco2 %4d\n# TYPE lux\nlux %5u\n", g_temperature, g_humidity, g_pressure, g_co2, g_lux);
+        break;
+    default:
+        break;
+    }
+
+    // POST
+//        sprintf(dataMessage, "# TYPE temperature\ntemperature %4.1f\n# TYPE humidity\nhumidity %4.1f\n", g_temperature, g_humidity);
+
+    ESP_ERROR_CHECK( esp_http_client_set_method(espHttpClient, HTTP_METHOD_POST) );
+    ESP_ERROR_CHECK( esp_http_client_set_post_field(espHttpClient, dataMessage, strlen(dataMessage)) );
+    err = esp_http_client_perform(espHttpClient);
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "messenge:\n%s", dataMessage);
+        ESP_LOGI(TAG, "HTTP POST Status = %d, content_length = %"PRId64, 
+                esp_http_client_get_status_code(espHttpClient),
+                esp_http_client_get_content_length(espHttpClient));
+    } else {
+        ESP_LOGE(TAG, "HTTP POST request failed: %s", esp_err_to_name(err));
+    }
+
+    pushgateway_app_stop();
+}
+
+TaskHandle_t xPushgateway;
+void vPushgateway_task(void *pvParametes)
+{
+    ESP_LOGD(TAG, "start Pushgateway");
+    vTaskDelay( pdMS_TO_TICKS(10000) );
+
+    while (1) {
+        pushgateway_main();
+
+        vTaskDelay( pdMS_TO_TICKS(20000) );
+    }
+}
+#endif //CONFIG_SOFTWARE_ESP_HTTP_CLIENT_SUPPORT
 
 ////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////
@@ -1709,9 +1983,13 @@ void app_main(void)
     xTaskCreatePinnedToCore(&vEspMqttClient_task, "vEspMqttClient_task", 4096 * 1, NULL, 2, &xEspMqttClient, TASK_CORE);
 #endif //CONFIG_SOFTWARE_ESP_MQTT_SUPPORT
 
+#if CONFIG_SOFTWARE_ESP_HTTP_CLIENT_SUPPORT
+    xTaskCreatePinnedToCore(&vPushgateway_task, "vPushgateway_task", 4096 * 1, NULL, 2, &xPushgateway, TASK_CORE);
+#endif //CONFIG_SOFTWARE_ESP_HTTP_CLIENT_SUPPORT
+
 #if CONFIG_SOFTWARE_EXTERNAL_SK6812_SUPPORT
     // EXTERNAL RGB LED BLINK
-    xTaskCreatePinnedToCore(&vExternal_RGBLedBlink_task, "External_RGBLedBlink_task", 4096 * 1, NULL, 2, &xExternalRGBLedBlink, TASK_CORE);
+    xTaskCreatePinnedToCore(&vExternal_RGBLedBlink_task, "External_RGBLedBlink_task", 4096 * 2, NULL, 2, &xExternalRGBLedBlink, TASK_CORE);
 #endif //CONFIG_SOFTWARE_EXTERNAL_SK6812_SUPPORT
 
 #if CONFIG_HTTPS_OTA_SUPPORT
