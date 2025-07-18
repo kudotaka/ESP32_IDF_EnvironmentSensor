@@ -345,6 +345,19 @@ void vExternal_i2c_task(void *pvParametes)
         g_sensor_mode -= 3;
     }
 #endif
+#if CONFIG_SOFTWARE_SENSOR_SCD30
+    bool _isSensorScd30 = false;
+    ret = Scd30_Init(i2c0_master_bus_handle);
+    if (ret == ESP_OK) {
+        ESP_LOGD(TAG, "Scd30_Init() is OK!");
+        _isSensorScd30 = true;
+    }
+    else
+    {
+        ESP_LOGE(TAG, "Scd30_Init Error");
+        g_sensor_mode -= 11;
+    }
+#endif
 
 #if CONFIG_SOFTWARE_SENSOR_BH1750
     bool _isSensorBh1750 = false;
@@ -439,6 +452,17 @@ void vExternal_i2c_task(void *pvParametes)
                 vTaskDelay( pdMS_TO_TICKS(100) );
                 g_temperature = Sht4x_GetTemperature();
                 g_humidity = Sht4x_GetHumidity();
+            }
+        }
+#endif
+#if CONFIG_SOFTWARE_SENSOR_SCD30
+        if (_isSensorScd30) {
+            ret = Scd30_Read();
+            if (ret == ESP_OK) {
+                vTaskDelay( pdMS_TO_TICKS(100) );
+                g_temperature = Scd30_GetTemperature();
+                g_humidity = Scd30_GetHumidity();
+                g_co2 = Scd30_GetIntCo2();
             }
         }
 #endif
@@ -1926,7 +1950,7 @@ void app_main(void)
     esp_log_level_set("*", ESP_LOG_ERROR);
     esp_log_level_set("MY-MAIN", ESP_LOG_DEBUG);
     esp_log_level_set("MY-WIFI", ESP_LOG_INFO);
-    esp_log_level_set("MY-HT16K33", ESP_LOG_INFO);
+//    esp_log_level_set("MY-SCD30", ESP_LOG_DEBUG);
 
 
 #if CONFIG_SOFTWARE_UI_SUPPORT
