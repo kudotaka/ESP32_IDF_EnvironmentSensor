@@ -254,6 +254,11 @@ menu "My DevUnit config"
             select SOFTWARE_SENSOR_TYPE_PRESSURE
             select SOFTWARE_EXTERNAL_I2C_SUPPORT
             default n
+        config SOFTWARE_SENSOR_DPS310
+            bool "SENSOR DPS310"
+            select SOFTWARE_SENSOR_TYPE_PRESSURE
+            select SOFTWARE_EXTERNAL_I2C_SUPPORT
+            default n
         config SOFTWARE_SENSOR_BME680
             bool "SENSOR BME680"
             select SOFTWARE_SENSOR_TYPE_TEMPERATURE

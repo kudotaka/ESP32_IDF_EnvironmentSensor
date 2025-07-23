@@ -165,6 +165,10 @@
 #include "qmp6988.h"
 #endif
 
+#if CONFIG_SOFTWARE_SENSOR_DPS310
+#include "dps310.h"
+#endif
+
 #if CONFIG_SOFTWARE_SENSOR_BME680
 #include "esp32_bme680.h"
 #endif

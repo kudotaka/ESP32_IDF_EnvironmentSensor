@@ -304,6 +304,19 @@ void vExternal_i2c_task(void *pvParametes)
         g_sensor_mode -= 4;
     }
 #endif
+#if CONFIG_SOFTWARE_SENSOR_DPS310
+    bool _isSensorDps310 = false;
+    ret = Dps310_Init(i2c0_master_bus_handle);
+    if (ret == ESP_OK) {
+        ESP_LOGD(TAG, "Dps310_Init() is OK!");
+        _isSensorDps310 = true;
+    }
+    else
+    {
+        ESP_LOGE(TAG, "Dps310_Init Error");
+        g_sensor_mode -= 4;
+    }
+#endif
 
 #if CONFIG_SOFTWARE_SENSOR_BME680
     bool _isSensorBme680 = false;
@@ -421,6 +434,13 @@ void vExternal_i2c_task(void *pvParametes)
 #if CONFIG_SOFTWARE_SENSOR_QMP6988
         if (_isSensorQmp6988) {
             g_pressure = Qmp6988_CalcPressure() / 100.0;
+        }
+#endif
+#if CONFIG_SOFTWARE_SENSOR_DPS310
+        if (_isSensorDps310) {
+            if (Dps310_Read() == ESP_OK) {
+                g_pressure = Dps310_GetPressure() / 100.0;
+            }
         }
 #endif
 
@@ -1950,7 +1970,6 @@ void app_main(void)
     esp_log_level_set("*", ESP_LOG_ERROR);
     esp_log_level_set("MY-MAIN", ESP_LOG_DEBUG);
     esp_log_level_set("MY-WIFI", ESP_LOG_INFO);
-//    esp_log_level_set("MY-SCD30", ESP_LOG_DEBUG);
 
 
 #if CONFIG_SOFTWARE_UI_SUPPORT
