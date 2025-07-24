@@ -42,6 +42,7 @@ static esp_err_t I2CWrite(uint8_t* cmd, uint8_t len) {
     {
         ESP_LOGE(TAG, "I2CWrite I2C i2c_master_transmit(1) error");
     }
+    vTaskDelay( pdMS_TO_TICKS(10) );
     return ret;
 }
 
@@ -57,21 +58,42 @@ static esp_err_t I2CRead(uint8_t* buf, uint8_t len) {
     {
         ESP_LOGE(TAG, "I2CRead I2C i2c_master_transmit_receive error");
     }
+    vTaskDelay( pdMS_TO_TICKS(10) );
     return ret;
 }
 
 static esp_err_t I2CWriteAndRead(uint8_t* cmd, uint8_t len1, uint8_t* buf, uint8_t len2) {
     esp_err_t ret = ESP_OK;
 
-    ret = i2c_master_transmit_receive(dev_dps310_device_handle, cmd, len1, buf, len2, DPS310_TIMEOUT_VALUE_MS);
+    ret = I2CWrite(cmd, len1);
     if (ret == ESP_OK)
     {
-//        ESP_LOGI(TAG, "I2CRead i2c_master_transmit_receive is OK.");
+//        ESP_LOGI(TAG, "I2CWriteAndRead I2CWrite is OK.");
     }
     else
     {
-        ESP_LOGE(TAG, "I2CRead I2C i2c_master_transmit_receive error");
+        ESP_LOGE(TAG, "I2CWriteAndRead I2C I2CWrite error");
     }
+    ret = I2CRead(buf, len2);
+    if (ret == ESP_OK)
+    {
+//        ESP_LOGI(TAG, "I2CWriteAndRead I2CRead is OK.");
+    }
+    else
+    {
+        ESP_LOGE(TAG, "I2CI2CWriteAndReadRead I2C I2CRead error");
+    }
+/*
+    ret = i2c_master_transmit_receive(dev_dps310_device_handle, cmd, len1, buf, len2, DPS310_TIMEOUT_VALUE_MS);
+    if (ret == ESP_OK)
+    {
+//        ESP_LOGI(TAG, "I2CWriteAndRead i2c_master_transmit_receive is OK.");
+    }
+    else
+    {
+        ESP_LOGE(TAG, "I2CWriteAndRead I2C i2c_master_transmit_receive error");
+    }
+*/
     return ret;
 }
 
@@ -88,6 +110,33 @@ esp_err_t Dps310_Meas(uint8_t data) {
 
     cmd[0] = DPS310_MEAS_CFG_REG;
     cmd[1] = data;
+    ret = I2CWrite(cmd, 2);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+    return ESP_OK;
+}
+
+esp_err_t Dps310_EnShift() {
+    esp_err_t ret = ESP_OK;
+    uint8_t cmd[2] = {0};
+
+    cmd[0] = DPS310_CFG_REG_REG;
+    cmd[1] = DPS310_CFG_RET_PRS_SHIFT_EN;
+
+    ret = I2CWrite(cmd, 2);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+    return ESP_OK;
+}
+
+esp_err_t Dps310_Standby() {
+    esp_err_t ret = ESP_OK;
+    uint8_t cmd[2] = {0};
+
+    cmd[0] = DPS310_MEAS_CFG_REG;
+    cmd[1] = DPS310_MEAS_CFG_MEAS_CTRL_IDLE;
     ret = I2CWrite(cmd, 2);
     if (ret != ESP_OK) {
         return ret;
@@ -226,6 +275,11 @@ esp_err_t Dps310_Read() {
     {
         return ret;
     }
+    ret = Dps310_Standby();
+    if (ret != ESP_OK)
+    {
+        return ESP_ERR_NOT_FOUND;
+    }
     return ESP_OK;
 }
 
@@ -307,30 +361,52 @@ esp_err_t Dps310_ReadCoefs() {
     return ESP_OK;
 }
 
-esp_err_t Dps310_EnShift() {
+esp_err_t Dps310_CorrectTemp() {
     esp_err_t ret = ESP_OK;
     uint8_t cmd[2] = {0};
 
-    cmd[0] = DPS310_CFG_REG_REG;
-    cmd[1] = DPS310_CFG_RET_PRS_SHIFT_EN;
-
+    cmd[0] = 0x0E;
+    cmd[1] = 0xA5;
     ret = I2CWrite(cmd, 2);
     if (ret != ESP_OK) {
         return ret;
     }
-    return ESP_OK;
-}
-
-esp_err_t Dps310_Standby() {
-    esp_err_t ret = ESP_OK;
-    uint8_t cmd[2] = {0};
-
-    cmd[0] = DPS310_MEAS_CFG_REG;
-    cmd[1] = DPS310_MEAS_CFG_MEAS_CTRL_IDLE;
+    cmd[0] = 0x0F;
+    cmd[1] = 0x96;
     ret = I2CWrite(cmd, 2);
     if (ret != ESP_OK) {
         return ret;
     }
+    cmd[0] = 0x62;
+    cmd[1] = 0x02;
+    ret = I2CWrite(cmd, 2);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+    cmd[0] = 0x0E;
+    cmd[1] = 0x00;
+    ret = I2CWrite(cmd, 2);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+    cmd[0] = 0x0F;
+    cmd[1] = 0x00;
+    ret = I2CWrite(cmd, 2);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    ret = Dps310_Meas(DPS310_MEAS_CFG_MEAS_CTRL_TMP);
+    if (ret != ESP_OK)
+    {
+        return ESP_ERR_NOT_FOUND;
+    }
+    ret = Dps310_ReadTemperature();
+    if (ret != ESP_OK)
+    {
+        return ret;
+    }
+
     return ESP_OK;
 }
 
@@ -423,6 +499,16 @@ esp_err_t Dps310_Init(i2c_master_bus_handle_t i2c_master_bus_handle) {
         return ESP_ERR_NOT_FOUND;
     }
     ret = Dps310_ReadTemperature();
+    if (ret != ESP_OK)
+    {
+        return ESP_ERR_NOT_FOUND;
+    }
+    ret = Dps310_Standby();
+    if (ret != ESP_OK)
+    {
+        return ESP_ERR_NOT_FOUND;
+    }
+    ret = Dps310_CorrectTemp();
     if (ret != ESP_OK)
     {
         return ESP_ERR_NOT_FOUND;
