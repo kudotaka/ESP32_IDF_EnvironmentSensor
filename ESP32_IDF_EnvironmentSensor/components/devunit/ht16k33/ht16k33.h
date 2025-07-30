@@ -45,5 +45,8 @@ esp_err_t HT16K33_DisplayFromRawData(uint8_t com, uint8_t raw1, uint8_t raw2);
 esp_err_t HT16K33_DisplayFromRawDataAt1Byte(uint8_t com, uint8_t half, uint8_t raw1);
 esp_err_t HT16K33_ParseFloatToDigit2Point1(float value, uint8_t segments_data[], uint8_t size);
 esp_err_t HT16K33_ParseTimeToDigitClockAndPulse(uint8_t hour, uint8_t minute, uint8_t second, uint8_t segments_data[], uint8_t size);
+esp_err_t HT16K33_ParseTimeToSecondAndPulse(uint8_t second, uint8_t segments_data[], uint8_t size);
+esp_err_t HT16K33_ParseTimeToMinute(uint8_t minute, uint8_t segments_data[], uint8_t size);
+esp_err_t HT16K33_ParseTimeToHour(uint8_t hour, uint8_t segments_data[], uint8_t size);
 
 esp_err_t HT16K33_ShowTest();

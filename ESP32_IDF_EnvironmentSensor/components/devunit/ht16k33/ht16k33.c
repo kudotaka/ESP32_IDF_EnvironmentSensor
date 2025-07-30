@@ -39,6 +39,7 @@ static esp_err_t I2CWriteWithAddr(uint8_t addr, uint8_t* buf, uint8_t len) {
     {
         ESP_LOGE(TAG, "I2CWrite I2C i2c_master_transmit(1) error");
     }
+    vTaskDelay( pdMS_TO_TICKS(10) );
     return ret;
 }
 
@@ -55,26 +56,62 @@ static esp_err_t I2CWrite(uint8_t* cmd, uint8_t len)
     {
         ESP_LOGE(TAG, "I2CWrite I2C i2c_master_transmit(1) error");
     }
+    vTaskDelay( pdMS_TO_TICKS(10) );
     return ret;
 }
 
-static esp_err_t I2CRead(uint8_t addr, uint8_t* buf, uint8_t len) {
+static esp_err_t I2CRead(uint8_t* buf, uint8_t len) {
+    esp_err_t ret = ESP_OK;
+
+    ret = i2c_master_receive(dev_ht16k33_device_handle, buf, len, HT16K33_TIMEOUT_VALUE_MS);
+    if (ret == ESP_OK)
+    {
+//        ESP_LOGI(TAG, "I2CRead i2c_master_receive is OK.");
+    }
+    else
+    {
+        ESP_LOGE(TAG, "I2CRead I2C i2c_master_receive error");
+    }
+    vTaskDelay( pdMS_TO_TICKS(10) );
+    return ret;
+}
+
+static esp_err_t I2CWriteAndRead(uint8_t addr, uint8_t* buf, uint8_t len) {
     esp_err_t ret = ESP_OK;
     uint8_t cmd[] = { 0 };
     cmd[0] = addr;
 
-    ret = i2c_master_transmit_receive(dev_ht16k33_device_handle, cmd, 1, buf, len, HT16K33_TIMEOUT_VALUE_MS);
+    ret = I2CWrite(cmd, 1);
     if (ret == ESP_OK)
     {
-//        ESP_LOGI(TAG, "I2CRead i2c_master_transmit_receive is OK.");
+//        ESP_LOGI(TAG, "I2CWriteAndRead I2CWrite is OK.");
     }
     else
     {
-        ESP_LOGE(TAG, "I2CRead I2C i2c_master_transmit_receive error");
+        ESP_LOGE(TAG, "I2CWriteAndRead I2C I2CWrite error");
     }
+    ret = I2CRead(buf, len);
+    if (ret == ESP_OK)
+    {
+//        ESP_LOGI(TAG, "I2CWriteAndRead I2CRead is OK.");
+    }
+    else
+    {
+        ESP_LOGE(TAG, "I2CI2CWriteAndReadRead I2C I2CRead error");
+    }
+/*
+    ret = i2c_master_transmit_receive(dev_ht16k33_device_handle, cmd, 1, buf, len, HT16K33_TIMEOUT_VALUE_MS);
+    if (ret == ESP_OK)
+    {
+//        ESP_LOGI(TAG, "I2CWriteAndRead i2c_master_transmit_receive is OK.");
+    }
+    else
+    {
+        ESP_LOGE(TAG, "I2CWriteAndRead I2C i2c_master_transmit_receive error");
+    }
+*/
     return ret;
 }
-
 
 esp_err_t HT16K33_DisplayFromRawData(uint8_t com, uint8_t raw1, uint8_t raw2)
 {
@@ -135,6 +172,67 @@ esp_err_t HT16K33_ParseFloatToDigit2Point1(float value, uint8_t segments_data[],
     return ESP_OK;
 }
 
+esp_err_t HT16K33_ParseTimeToSecondAndPulse(uint8_t second, uint8_t segments_data[], uint8_t size)
+{
+    if ( size < 1)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (second > 60)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+//    uint8_t second10 = second / 10;
+    uint8_t second01 = second % 10;
+    if (second01 % 2 == 0)
+    {
+        //pulse OFF
+        segments_data[0] = 0;
+    }
+    else
+    {
+        //pulse ON
+        segments_data[0] = 1;
+    }
+
+    return ESP_OK;
+}
+
+esp_err_t HT16K33_ParseTimeToMinute(uint8_t minute, uint8_t segments_data[], uint8_t size)
+{
+    if ( size < 2)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (minute > 60)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    segments_data[0] = convertNumberToSegments(minute / 10);
+    segments_data[1] = convertNumberToSegments(minute % 10);
+
+    return ESP_OK;
+}
+
+esp_err_t HT16K33_ParseTimeToHour(uint8_t hour, uint8_t segments_data[], uint8_t size)
+{
+    if ( size < 2)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (hour > 23)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    segments_data[0] = convertNumberToSegments(hour / 10);
+    segments_data[1] = convertNumberToSegments(hour % 10);
+
+    return ESP_OK;
+}
+
 esp_err_t HT16K33_ParseTimeToDigitClockAndPulse(uint8_t hour, uint8_t minute, uint8_t second, uint8_t segments_data[], uint8_t size)
 {
     if ( size < 5)
@@ -146,22 +244,9 @@ esp_err_t HT16K33_ParseTimeToDigitClockAndPulse(uint8_t hour, uint8_t minute, ui
         return ESP_ERR_INVALID_ARG;
     }
 
-    segments_data[0] = convertNumberToSegments(hour / 10);
-    segments_data[1] = convertNumberToSegments(hour % 10);
-    segments_data[2] = convertNumberToSegments(minute / 10);
-    segments_data[3] = convertNumberToSegments(minute % 10);
-//    uint8_t second10 = second / 10;
-    uint8_t second01 = second % 10;
-    if (second01 % 2 == 0)
-    {
-        //pulse OFF
-        segments_data[4] = 0;
-    }
-    else
-    {
-        //pulse ON
-        segments_data[4] = 1;
-    }
+    HT16K33_ParseTimeToHour(hour, &segments_data[0], 2);
+    HT16K33_ParseTimeToMinute(minute, &segments_data[2], 2);
+    HT16K33_ParseTimeToSecondAndPulse(second, &segments_data[4], 1);
 
     return ESP_OK;
 }
@@ -292,7 +377,7 @@ esp_err_t HT16K33_DisplayOff()
 esp_err_t HT16K33_CheckDevice()
 {
     uint8_t reg_value = 0;
-    return I2CRead(0x60, &reg_value, 1);
+    return I2CWriteAndRead(0x60, &reg_value, 1);
 }
 
 esp_err_t HT16K33_DeInit()

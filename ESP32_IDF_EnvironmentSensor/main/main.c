@@ -127,6 +127,10 @@ static bool g_clockout_status = false;
 #endif //CONFIG_SOFTWARE_EXTERNAL_RTC_CLOCKOUT_1KHZ_SUPPORT
 #endif //CONFIG_SOFTWARE_EXTERNAL_RTC_SUPPORT
 
+#if CONFIG_SOFTWARE_SENSOR_SHT4X_SUPPORT || CONFIG_SOFTWARE_SENSOR_SHT4X
+bool g_isSensorSht4x = false;
+#endif //CONFIG_SOFTWARE_SENSOR_SHT4X_SUPPORT
+
 #if CONFIG_SOFTWARE_CLOCK_SOUND_SUPPORT
 uint8_t g_clockCount = 0;
 uint8_t g_clockCurrent = 0;
@@ -351,6 +355,7 @@ void vExternal_i2c_task(void *pvParametes)
     if (ret == ESP_OK) {
         ESP_LOGD(TAG, "Sht4x_Init() is OK!");
         _isSensorSht4x = true;
+        g_isSensorSht4x = true;
     }
     else
     {
@@ -590,9 +595,13 @@ static void gpio_clock_task(void* arg)
 #endif //CONFIG_SOFTWARE_EXTERNAL_6DIGIT_DISPLAY_SUPPORT
 #if CONFIG_SOFTWARE_EXTERNAL_HT16K33_SUPPORT
         bool bHt16K33Init = true;
-        bool bFitst = true;
 #endif //CONFIG_SOFTWARE_EXTERNAL_HT16K33_SUPPORT
 
+#if CONFIG_SOFTWARE_EXTERNAL_HT16K33_SUPPORT
+    uint8_t backupHour = 0;
+    uint8_t backupMinute = 0;
+    uint8_t backupSecond = 0;
+#endif //CONFIG_SOFTWARE_EXTERNAL_HT16K33_SUPPORT
     uint32_t io_num;
     for (;;) {
         if (xQueueReceive(gpio_evt_clock_queue, &io_num, portMAX_DELAY)) {
@@ -623,42 +632,54 @@ static void gpio_clock_task(void* arg)
 #if CONFIG_SOFTWARE_EXTERNAL_HT16K33_SUPPORT
             if (bHt16K33Init == true)
             {
-//                uint8_t parseArray[3] = { 0 };
-//                HT16K33_ParseFloatToDigit2Point1(g_temperature, parseArray, 3);
-//                HT16K33_DisplayFromRawDataAt1Byte(HT16K33_COM0, HT16K33_COM_SECOND_HALF, parseArray[0]);
-//                HT16K33_DisplayFromRawDataAt1Byte(HT16K33_COM1, HT16K33_COM_SECOND_HALF, parseArray[1]);
-//                HT16K33_DisplayFromRawDataAt1Byte(HT16K33_COM2, HT16K33_COM_SECOND_HALF, parseArray[2]);
                 uint8_t clockArray[5] = { 0 };
-                HT16K33_ParseTimeToDigitClockAndPulse(rtcdate.hour, rtcdate.minute, rtcdate.second, clockArray, sizeof(clockArray)/sizeof(uint8_t));
-/*
-                HT16K33_DisplayFromRawData(HT16K33_COM0, clockArray[0], parseArray[0]);
-                HT16K33_DisplayFromRawData(HT16K33_COM1, clockArray[1], parseArray[1]);
-                HT16K33_DisplayFromRawData(HT16K33_COM2, clockArray[2], parseArray[2]);
-                HT16K33_DisplayFromRawData(HT16K33_COM3, clockArray[3], convertCharToSegments(' '));
-                if (clockArray[4] == 0)
+//                HT16K33_ParseTimeToDigitClockAndPulse(rtcdate.hour, rtcdate.minute, rtcdate.second, clockArray, sizeof(clockArray)/sizeof(uint8_t));
+                if (backupSecond != rtcdate.second)
                 {
-                    HT16K33_DisplayFromRawData(HT16K33_COM4, convertCharToSegments(' '), convertCharToSegments(' '));
+                    HT16K33_ParseTimeToSecondAndPulse(rtcdate.second, &clockArray[4], 1);
+                    if (clockArray[4] == 0)
+                    {
+                        HT16K33_DisplayFromRawDataAt1Byte(HT16K33_COM4, HT16K33_COM_SECOND_HALF, convertCharToSegments(' '));
+                    }
+                    else
+                    {
+                        HT16K33_DisplayFromRawDataAt1Byte(HT16K33_COM4, HT16K33_COM_SECOND_HALF, convertCharToSegments(':'));
+                    }
+                    backupSecond = rtcdate.second;
                 }
-                else
+                if (backupMinute != rtcdate.minute)
                 {
-                    HT16K33_DisplayFromRawData(HT16K33_COM4, convertCharToSegments(':'), convertCharToSegments(' '));
+                    HT16K33_ParseTimeToMinute(rtcdate.minute, &clockArray[2], 2);
+                    HT16K33_DisplayFromRawDataAt1Byte(HT16K33_COM3, HT16K33_COM_SECOND_HALF, clockArray[3]);
+                    HT16K33_DisplayFromRawDataAt1Byte(HT16K33_COM2, HT16K33_COM_SECOND_HALF, clockArray[2]);
+
+#if CONFIG_SOFTWARE_SENSOR_SHT4X_SUPPORT || CONFIG_SOFTWARE_SENSOR_SHT4X
+                    if (g_isSensorSht4x) {
+                        uint8_t temperatureArray[3] = { 0 };
+                        uint8_t humidityArray[3] = { 0 };
+                        esp_err_t ret = Sht4x_Read();
+                        if (ret == ESP_OK) {
+                            vTaskDelay( pdMS_TO_TICKS(20) );
+                            HT16K33_ParseFloatToDigit2Point1(Sht4x_GetTemperature(), temperatureArray, 3);
+                            HT16K33_DisplayFromRawDataAt1Byte(HT16K33_COM0, HT16K33_COM_FIRST_HALF, temperatureArray[0]);
+                            HT16K33_DisplayFromRawDataAt1Byte(HT16K33_COM1, HT16K33_COM_FIRST_HALF, temperatureArray[1]);
+                            HT16K33_DisplayFromRawDataAt1Byte(HT16K33_COM2, HT16K33_COM_FIRST_HALF, temperatureArray[2]);
+                            HT16K33_ParseFloatToDigit2Point1(Sht4x_GetHumidity(), humidityArray, 3);
+                            HT16K33_DisplayFromRawDataAt1Byte(HT16K33_COM4, HT16K33_COM_FIRST_HALF, humidityArray[0]);
+                            HT16K33_DisplayFromRawDataAt1Byte(HT16K33_COM5, HT16K33_COM_FIRST_HALF, humidityArray[1]);
+                            HT16K33_DisplayFromRawDataAt1Byte(HT16K33_COM6, HT16K33_COM_FIRST_HALF, humidityArray[2]);
+                        }
+                    }
+#endif //CONFIG_SOFTWARE_SENSOR_SHT4X_SUPPORT
+
+                    backupMinute = rtcdate.minute;
                 }
-*/
-                if (bFitst)
+                if (backupHour != rtcdate.hour)
                 {
-                    HT16K33_DisplayFromRawDataAt1Byte(HT16K33_COM0, HT16K33_COM_FIRST_HALF, clockArray[0]);
-                    HT16K33_DisplayFromRawDataAt1Byte(HT16K33_COM1, HT16K33_COM_FIRST_HALF, clockArray[1]);
-                    HT16K33_DisplayFromRawDataAt1Byte(HT16K33_COM2, HT16K33_COM_FIRST_HALF, clockArray[2]);
-                    HT16K33_DisplayFromRawDataAt1Byte(HT16K33_COM3, HT16K33_COM_FIRST_HALF, clockArray[3]);
-                    bFitst = false;
-                }
-                if (clockArray[4] == 0)
-                {
-                    HT16K33_DisplayFromRawDataAt1Byte(HT16K33_COM4, HT16K33_COM_FIRST_HALF, convertCharToSegments(' '));
-                }
-                else
-                {
-                    HT16K33_DisplayFromRawDataAt1Byte(HT16K33_COM4, HT16K33_COM_FIRST_HALF, convertCharToSegments(':'));
+                    HT16K33_ParseTimeToHour(rtcdate.hour, &clockArray[0], 2);
+                    HT16K33_DisplayFromRawDataAt1Byte(HT16K33_COM1, HT16K33_COM_SECOND_HALF, clockArray[1]);
+                    HT16K33_DisplayFromRawDataAt1Byte(HT16K33_COM0, HT16K33_COM_SECOND_HALF, clockArray[0]);
+                    backupHour = rtcdate.hour;
                 }
             }
             else
