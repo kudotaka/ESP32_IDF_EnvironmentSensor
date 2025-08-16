@@ -81,6 +81,10 @@
 #include "esp_crt_bundle.h"
 #endif //CONFIG_HTTPS_OTA_SUPPORT
 
+#if CONFIG_SOFTWARE_ESPTIMER_SUPPORT
+#include "esp_timer.h"
+#endif //CONFIG_SOFTWARE_ESPTIMER_SUPPORT
+
 #if (  CONFIG_SOFTWARE_INTERNAL_WIFI_SUPPORT \
     || CONFIG_SOFTWARE_INTERNAL_BUTTON_SUPPORT \
     || CONFIG_SOFTWARE_EXTERNAL_SK6812_SUPPORT \
@@ -145,7 +149,12 @@ static void adc_calibration_deinit(adc_cali_handle_t handle);
 #endif //CONFIG_MEASURE_OPERATION_VOLTAGE_SUPPORT
 
 #if CONFIG_SOFTWARE_EXTERNAL_HT16K33_SUPPORT
+#if CONFIG_SOFTWARE_EXTERNAL_HT16K33_LED_7SEG
 void SevenSegInit(void);
+#endif //CONFIG_SOFTWARE_EXTERNAL_HT16K33_LED_7SEG
+#if CONFIG_SOFTWARE_EXTERNAL_HT16K33_LED_DOTMATRIX
+void DotMatrix_SandClock(void);
+#endif //CONFIG_SOFTWARE_EXTERNAL_HT16K33_LED_DOTMATRIX
 #endif //CONFIG_SOFTWARE_EXTERNAL_HT16K33_SUPPORT
 
 
@@ -416,7 +425,12 @@ void vExternal_i2c_task(void *pvParametes)
     if (ret == ESP_OK) {
         ESP_LOGD(TAG, "HT16K33_Init() is OK!");
 
-//        SevenSegInit();
+#if CONFIG_SOFTWARE_EXTERNAL_HT16K33_LED_7SEG
+        SevenSegInit();
+#endif //CONFIG_SOFTWARE_EXTERNAL_HT16K33_LED_7SEG
+#if CONFIG_SOFTWARE_EXTERNAL_HT16K33_LED_DOTMATRIX
+        DotMatrix_SandClock();
+#endif //CONFIG_SOFTWARE_EXTERNAL_HT16K33_LED_DOTMATRIX_
     }
     else
     {
@@ -561,6 +575,40 @@ void vExternal_uart_task(void *pvParametes)
 #endif //CONFIG_SOFTWARE_SENSOR_MHZ19C
 #endif //CONFIG_SOFTWARE_EXTERNAL_UART_SUPPORT
 
+#if CONFIG_SOFTWARE_ESPTIMER_SUPPORT
+TaskHandle_t xTimer;
+static uint32_t g_CountDown = 0;
+static uint32_t g_MaxCountDown = (1) * 60;
+static void periodic_timer_callback(void* arg);
+static void periodic_timer_callback(void* arg)
+{
+    int64_t time_since_boot = esp_timer_get_time();
+    ESP_LOGI(TAG, "Periodic timer called, time since boot: %lld us", time_since_boot);
+    if (g_CountDown > 0)
+    {
+        g_CountDown--;
+    }
+    else
+    {
+        g_CountDown = g_MaxCountDown;
+    }
+    ESP_LOGI(TAG, "Count Down: %ld", g_CountDown);
+}
+static void vTimer_task(void* arg)
+{
+    g_CountDown = g_MaxCountDown;
+    const esp_timer_create_args_t periodic_timer_args = {
+            .callback = &periodic_timer_callback,
+            .name = "periodic"
+    };
+
+    esp_timer_handle_t periodic_timer;
+    ESP_ERROR_CHECK(esp_timer_create(&periodic_timer_args, &periodic_timer));
+    ESP_ERROR_CHECK(esp_timer_start_periodic(periodic_timer, 1000000));
+
+    vTaskDelete(NULL);
+}
+#endif //CONFIG_SOFTWARE_ESPTIMER_SUPPORT
 
 #if CONFIG_SOFTWARE_EXTERNAL_RTC_SUPPORT
 TaskHandle_t xClock;
@@ -605,7 +653,11 @@ static void gpio_clock_task(void* arg)
     uint32_t io_num;
     for (;;) {
         if (xQueueReceive(gpio_evt_clock_queue, &io_num, portMAX_DELAY)) {
-//            ESP_LOGI(TAG, "CLOCK GPIO[%"PRIu32"] intr, val: %d", io_num, gpio_get_level(io_num));
+#if CONFIG_SOFTWARE_ESPTIMER_SUPPORT
+            int64_t time_since_boot = esp_timer_get_time();
+            ESP_LOGI(TAG, "gpio_evt_clock called, time since boot: %lld us", time_since_boot);
+#else
+            ESP_LOGI(TAG, "CLOCK GPIO[%"PRIu32"] intr, val: %d", io_num, gpio_get_level(io_num));
             rtc_date_t rtcdate;
             PCF8563_GetTime(&rtcdate);
 #if CONFIG_SOFTWARE_EXTERNAL_6DIGIT_DISPLAY_SUPPORT
@@ -692,6 +744,7 @@ static void gpio_clock_task(void* arg)
 #if CONFIG_SOFTWARE_EXTERNAL_HT16K33_SUPPORT
             }
 #endif //CONFIG_SOFTWARE_EXTERNAL_HT16K33_SUPPORT
+#endif //CONFIG_SOFTWARE_ESPTIMER_SUPPORT
         }
     }
 }
@@ -862,10 +915,140 @@ void vClock_task(void *pvParametes)
 #endif //CONFIG_SOFTWARE_EXTERNAL_RTC_SUPPORT
 
 #if CONFIG_SOFTWARE_EXTERNAL_HT16K33_SUPPORT
+#if CONFIG_SOFTWARE_EXTERNAL_HT16K33_LED_DOTMATRIX
+void vDotMatrixSandClock_task(void *pvParametes)
+{
+    ESP_LOGD(TAG, "start DotMatrix_SandClock");
+
+    ht16k33_target targets[] = {
+        {HT16K33_2nd, HT16K33_ROW8, HT16K33_COL8},
+        {HT16K33_2nd, HT16K33_ROW8, HT16K33_COL7},
+        {HT16K33_2nd, HT16K33_ROW7, HT16K33_COL8},
+
+        {HT16K33_2nd, HT16K33_ROW8, HT16K33_COL6},
+        {HT16K33_2nd, HT16K33_ROW7, HT16K33_COL7},
+        {HT16K33_2nd, HT16K33_ROW6, HT16K33_COL8},
+
+        {HT16K33_2nd, HT16K33_ROW8, HT16K33_COL5},
+        {HT16K33_2nd, HT16K33_ROW7, HT16K33_COL6},
+        {HT16K33_2nd, HT16K33_ROW6, HT16K33_COL7},
+        {HT16K33_2nd, HT16K33_ROW5, HT16K33_COL8},
+
+        {HT16K33_2nd, HT16K33_ROW8, HT16K33_COL4},
+        {HT16K33_2nd, HT16K33_ROW7, HT16K33_COL5},
+        {HT16K33_2nd, HT16K33_ROW6, HT16K33_COL6},
+        {HT16K33_2nd, HT16K33_ROW5, HT16K33_COL7},
+        {HT16K33_2nd, HT16K33_ROW4, HT16K33_COL8},
+
+        {HT16K33_2nd, HT16K33_ROW8, HT16K33_COL3},
+        {HT16K33_2nd, HT16K33_ROW7, HT16K33_COL4},
+        {HT16K33_2nd, HT16K33_ROW6, HT16K33_COL5},
+        {HT16K33_2nd, HT16K33_ROW5, HT16K33_COL6},
+        {HT16K33_2nd, HT16K33_ROW4, HT16K33_COL7},
+        {HT16K33_2nd, HT16K33_ROW3, HT16K33_COL8},
+
+        {HT16K33_2nd, HT16K33_ROW8, HT16K33_COL2},
+        {HT16K33_2nd, HT16K33_ROW7, HT16K33_COL3},
+        {HT16K33_2nd, HT16K33_ROW6, HT16K33_COL4},
+        {HT16K33_2nd, HT16K33_ROW5, HT16K33_COL5},
+        {HT16K33_2nd, HT16K33_ROW4, HT16K33_COL6},
+        {HT16K33_2nd, HT16K33_ROW3, HT16K33_COL7},
+        {HT16K33_2nd, HT16K33_ROW2, HT16K33_COL8},
+
+        {HT16K33_2nd, HT16K33_ROW8, HT16K33_COL1},
+        {HT16K33_2nd, HT16K33_ROW7, HT16K33_COL2},
+        {HT16K33_2nd, HT16K33_ROW6, HT16K33_COL3},
+        {HT16K33_2nd, HT16K33_ROW5, HT16K33_COL4},
+        {HT16K33_2nd, HT16K33_ROW4, HT16K33_COL5},
+        {HT16K33_2nd, HT16K33_ROW3, HT16K33_COL6},
+        {HT16K33_2nd, HT16K33_ROW2, HT16K33_COL7},
+        {HT16K33_2nd, HT16K33_ROW1, HT16K33_COL8},
+
+        {HT16K33_2nd, HT16K33_ROW7, HT16K33_COL1},
+        {HT16K33_2nd, HT16K33_ROW6, HT16K33_COL2},
+        {HT16K33_2nd, HT16K33_ROW5, HT16K33_COL3},
+        {HT16K33_2nd, HT16K33_ROW4, HT16K33_COL4},
+        {HT16K33_2nd, HT16K33_ROW3, HT16K33_COL5},
+        {HT16K33_2nd, HT16K33_ROW2, HT16K33_COL6},
+        {HT16K33_2nd, HT16K33_ROW1, HT16K33_COL7},
+
+        {HT16K33_2nd, HT16K33_ROW6, HT16K33_COL1},
+        {HT16K33_2nd, HT16K33_ROW5, HT16K33_COL2},
+        {HT16K33_2nd, HT16K33_ROW4, HT16K33_COL3},
+        {HT16K33_2nd, HT16K33_ROW3, HT16K33_COL4},
+        {HT16K33_2nd, HT16K33_ROW2, HT16K33_COL5},
+        {HT16K33_2nd, HT16K33_ROW1, HT16K33_COL6},
+
+        {HT16K33_2nd, HT16K33_ROW5, HT16K33_COL1},
+        {HT16K33_2nd, HT16K33_ROW4, HT16K33_COL2},
+        {HT16K33_2nd, HT16K33_ROW3, HT16K33_COL3},
+        {HT16K33_2nd, HT16K33_ROW2, HT16K33_COL4},
+        {HT16K33_2nd, HT16K33_ROW1, HT16K33_COL5},
+
+        {HT16K33_2nd, HT16K33_ROW4, HT16K33_COL1},
+        {HT16K33_2nd, HT16K33_ROW3, HT16K33_COL2},
+        {HT16K33_2nd, HT16K33_ROW2, HT16K33_COL3},
+        {HT16K33_2nd, HT16K33_ROW1, HT16K33_COL4},
+
+        {HT16K33_2nd, HT16K33_ROW3, HT16K33_COL1},
+        {HT16K33_2nd, HT16K33_ROW2, HT16K33_COL2},
+        {HT16K33_2nd, HT16K33_ROW1, HT16K33_COL3},
+
+        {HT16K33_2nd, HT16K33_ROW2, HT16K33_COL1},
+        {HT16K33_2nd, HT16K33_ROW1, HT16K33_COL2}
+    };
+
+    const uint32_t delay = 900; // 900:179 950:189 1000:199 500:103
+    ESP_LOGI(TAG, "DotMatrix_SandClock time start");
+    HT16K33_DisplayClear();
+    vTaskDelay( pdMS_TO_TICKS(delay) );
+
+    // HT16K33_2nd on
+    HT16K33_DisplayFromRawDataAt1Byte(HT16K33_ROW1, HT16K33_2nd, HT16K33_COL_ALLON);
+    HT16K33_DisplayFromRawDataAt1Byte(HT16K33_ROW2, HT16K33_2nd, HT16K33_COL_ALLON);
+    HT16K33_DisplayFromRawDataAt1Byte(HT16K33_ROW3, HT16K33_2nd, HT16K33_COL_ALLON);
+    HT16K33_DisplayFromRawDataAt1Byte(HT16K33_ROW4, HT16K33_2nd, HT16K33_COL_ALLON);
+    HT16K33_DisplayFromRawDataAt1Byte(HT16K33_ROW5, HT16K33_2nd, HT16K33_COL_ALLON);
+    HT16K33_DisplayFromRawDataAt1Byte(HT16K33_ROW6, HT16K33_2nd, HT16K33_COL_ALLON);
+    HT16K33_DisplayFromRawDataAt1Byte(HT16K33_ROW7, HT16K33_2nd, HT16K33_COL_ALLON);
+    HT16K33_DisplayFromRawDataAt1Byte(HT16K33_ROW8, HT16K33_2nd, HT16K33_COL_ALLON);
+    vTaskDelay( pdMS_TO_TICKS(delay) );
+    for (uint8_t i = 0; i < sizeof(targets)/sizeof(ht16k33_target); i++)
+    {
+        uint8_t buf0 = 0;
+        uint8_t buf1 = 0;
+        uint8_t buf2 = 0;
+        HT16K33_ReadRAMRegstoryFromRawDataAt1Byte(targets[i].row, HT16K33_2nd, &buf2);
+        HT16K33_DisplayFromRawDataAt1Byte(targets[i].row, HT16K33_2nd, buf2^targets[i].col);
+        vTaskDelay( pdMS_TO_TICKS(delay) );
+
+        HT16K33_ReadRAMRegstoryFromRawDataAt1Byte(HT16K33_ROW1, HT16K33_1st, &buf0);
+        HT16K33_DisplayFromRawDataAt1Byte(HT16K33_ROW1, HT16K33_1st, buf0^HT16K33_COL1);
+        vTaskDelay( pdMS_TO_TICKS(delay) );
+        HT16K33_ReadRAMRegstoryFromRawDataAt1Byte(HT16K33_ROW1, HT16K33_1st, &buf0);
+        HT16K33_DisplayFromRawDataAt1Byte(HT16K33_ROW1, HT16K33_1st, buf0^HT16K33_COL1);
+
+        HT16K33_ReadRAMRegstoryFromRawDataAt1Byte(targets[i].row, HT16K33_1st, &buf1);
+        HT16K33_DisplayFromRawDataAt1Byte(targets[i].row, HT16K33_1st, buf1|targets[i].col);
+        vTaskDelay( pdMS_TO_TICKS(delay) );
+    }
+    HT16K33_DisplayFromRawDataAt1Byte(HT16K33_ROW1, HT16K33_2nd, HT16K33_COL_ALLOFF);
+    HT16K33_DisplayFromRawDataAt1Byte(HT16K33_ROW1, HT16K33_1st, HT16K33_COL_ALLON);
+    ESP_LOGI(TAG, "DotMatrix_SandClock time end");
+
+    vTaskDelete(NULL);
+}
+
+void DotMatrix_SandClock()
+{
+    xTaskCreate(vDotMatrixSandClock_task, "vDotMatrixSandClock_task", 4096 * 1, NULL, 10, NULL);
+}
+#endif //CONFIG_SOFTWARE_EXTERNAL_HT16K33_LED_DOTMATRIX
+
+#if CONFIG_SOFTWARE_EXTERNAL_HT16K33_LED_7SEG
 void vSevenSeg_task(void *pvParametes)
 {
     ESP_LOGD(TAG, "start 7seg");
- 
 
     while (1) {
         HT16K33_ShowTest();
@@ -878,6 +1061,7 @@ void SevenSegInit()
 {
     xTaskCreate(vSevenSeg_task, "vSevenSeg_task", 4096 * 1, NULL, 10, NULL);
 }
+#endif //CONFIG_SOFTWARE_EXTERNAL_HT16K33_LED_7SEG
 #endif //CONFIG_SOFTWARE_EXTERNAL_HT16K33_SUPPORT
 
 #if CONFIG_SOFTWARE_SENSOR_USE_SENSOR
@@ -1991,6 +2175,7 @@ void app_main(void)
     esp_log_level_set("*", ESP_LOG_ERROR);
     esp_log_level_set("MY-MAIN", ESP_LOG_DEBUG);
     esp_log_level_set("MY-WIFI", ESP_LOG_INFO);
+    esp_log_level_set("MY-HT16K33", ESP_LOG_INFO);
 
 
 #if CONFIG_SOFTWARE_UI_SUPPORT
@@ -2031,6 +2216,10 @@ void app_main(void)
     // clock
     xTaskCreatePinnedToCore(&vClock_task, "clock_task", 4096 * 1, NULL, 2, &xClock, TASK_CORE);
 #endif //CONFIG_SOFTWARE_EXTERNAL_RTC_SUPPORT
+
+#if CONFIG_SOFTWARE_ESPTIMER_SUPPORT
+    xTaskCreatePinnedToCore(&vTimer_task, "timer_task", 4096 * 1, NULL, 2, &xTimer, TASK_CORE);
+#endif //CONFIG_SOFTWARE_ESPTIMER_SUPPORT
 
 #if CONFIG_SOFTWARE_EXTERNAL_LED_SUPPORT
     // EXTERNAL LED

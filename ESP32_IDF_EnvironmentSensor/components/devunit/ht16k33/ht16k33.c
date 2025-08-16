@@ -128,6 +128,11 @@ esp_err_t HT16K33_DisplayFromRawDataAt1Byte(uint8_t com, uint8_t half, uint8_t r
     return I2CWriteWithAddr(0x00 | com * 2 | half, cmd, 1);
 }
 
+esp_err_t HT16K33_ReadRAMRegstoryFromRawDataAt1Byte(uint8_t com, uint8_t half, uint8_t* buf)
+{
+    return I2CWriteAndRead(0x00 | com * 2 | half, buf, 1);
+}
+
 esp_err_t HT16K33_ParseFloatToDigit2Point1(float value, uint8_t segments_data[], uint8_t size)
 {
     if ( size < 3)

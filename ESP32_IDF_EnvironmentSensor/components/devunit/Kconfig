@@ -230,6 +230,19 @@ menu "My DevUnit config"
         bool "HT16K33-Hardware [External]"
         select SOFTWARE_EXTERNAL_I2C_SUPPORT
         default n
+    choice SOFTWARE_EXTERNAL_HT16K33_LED_TYPE
+        prompt "LED Type"
+        depends on SOFTWARE_EXTERNAL_HT16K33_SUPPORT
+        default SOFTWARE_EXTERNAL_HT16K33_LED_7SEG
+
+        config SOFTWARE_EXTERNAL_HT16K33_LED_7SEG
+            bool "7Seg"
+        config SOFTWARE_EXTERNAL_HT16K33_LED_DOTMATRIX
+            bool "DotMatrix"
+    endchoice
+    config SOFTWARE_ESPTIMER_SUPPORT
+        bool "ESP Timer"
+        default n
     
     menu "Sensor config"
         config SOFTWARE_SENSOR_SHT3X

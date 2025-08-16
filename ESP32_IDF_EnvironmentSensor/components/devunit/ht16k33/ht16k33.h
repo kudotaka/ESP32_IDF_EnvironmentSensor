@@ -37,12 +37,43 @@
 #define HT16K33_COM_FIRST_HALF    (0x00)
 #define HT16K33_COM_SECOND_HALF   (0x01)
 
+// dot matrix
+#define HT16K33_ROW1    (0x00)
+#define HT16K33_ROW2    (0x01)
+#define HT16K33_ROW3    (0x02)
+#define HT16K33_ROW4    (0x03)
+#define HT16K33_ROW5    (0x04)
+#define HT16K33_ROW6    (0x05)
+#define HT16K33_ROW7    (0x06)
+#define HT16K33_ROW8    (0x07)
+
+#define HT16K33_COL1    (0x01)
+#define HT16K33_COL2    (0x02)
+#define HT16K33_COL3    (0x04)
+#define HT16K33_COL4    (0x08)
+#define HT16K33_COL5    (0x10)
+#define HT16K33_COL6    (0x20)
+#define HT16K33_COL7    (0x40)
+#define HT16K33_COL8    (0x80)
+#define HT16K33_COL_ALLOFF (0x00)
+#define HT16K33_COL_ALLON  (0xFF)
+
+#define HT16K33_1st     (0x00)
+#define HT16K33_2nd     (0x01)
+
+typedef struct {
+    uint8_t place;
+    uint8_t row;
+    uint8_t col;
+} ht16k33_target;
+
 esp_err_t HT16K33_Init(i2c_master_bus_handle_t i2c_master_bus_handle);
 esp_err_t HT16K33_DeInit();
 esp_err_t HT16K33_SetBrigtness(uint8_t b);
 esp_err_t HT16K33_DisplayClear();
 esp_err_t HT16K33_DisplayFromRawData(uint8_t com, uint8_t raw1, uint8_t raw2);
 esp_err_t HT16K33_DisplayFromRawDataAt1Byte(uint8_t com, uint8_t half, uint8_t raw1);
+esp_err_t HT16K33_ReadRAMRegstoryFromRawDataAt1Byte(uint8_t com, uint8_t half, uint8_t* buf);
 esp_err_t HT16K33_ParseFloatToDigit2Point1(float value, uint8_t segments_data[], uint8_t size);
 esp_err_t HT16K33_ParseTimeToDigitClockAndPulse(uint8_t hour, uint8_t minute, uint8_t second, uint8_t segments_data[], uint8_t size);
 esp_err_t HT16K33_ParseTimeToSecondAndPulse(uint8_t second, uint8_t segments_data[], uint8_t size);
