@@ -154,6 +154,7 @@ void SevenSegInit(void);
 #endif //CONFIG_SOFTWARE_EXTERNAL_HT16K33_LED_7SEG
 #if CONFIG_SOFTWARE_EXTERNAL_HT16K33_LED_DOTMATRIX
 void DotMatrix_SandClock(void);
+void DotMatrix_7x5font(void);
 #endif //CONFIG_SOFTWARE_EXTERNAL_HT16K33_LED_DOTMATRIX
 #endif //CONFIG_SOFTWARE_EXTERNAL_HT16K33_SUPPORT
 
@@ -430,6 +431,7 @@ void vExternal_i2c_task(void *pvParametes)
 #endif //CONFIG_SOFTWARE_EXTERNAL_HT16K33_LED_7SEG
 #if CONFIG_SOFTWARE_EXTERNAL_HT16K33_LED_DOTMATRIX
         DotMatrix_SandClock();
+//        DotMatrix_7x5font();
 #endif //CONFIG_SOFTWARE_EXTERNAL_HT16K33_LED_DOTMATRIX_
     }
     else
@@ -916,6 +918,148 @@ void vClock_task(void *pvParametes)
 
 #if CONFIG_SOFTWARE_EXTERNAL_HT16K33_SUPPORT
 #if CONFIG_SOFTWARE_EXTERNAL_HT16K33_LED_DOTMATRIX
+void vDotMatrix7x5font_task(void *pvParametes)
+{
+    ESP_LOGD(TAG, "start DotMatrix7x5font");
+    ht16k33_7x5font_target targets[] = {
+        {HT16K33_2nd,
+            HT16K33_COL_ALLOFF, // 0
+            HT16K33_COL2|HT16K33_COL3|HT16K33_COL4,
+            HT16K33_COL1|HT16K33_COL5,
+            HT16K33_COL1|HT16K33_COL4|HT16K33_COL5,
+            HT16K33_COL1|HT16K33_COL3|HT16K33_COL5,
+            HT16K33_COL1|HT16K33_COL2|HT16K33_COL5,
+            HT16K33_COL1|HT16K33_COL5,
+            HT16K33_COL2|HT16K33_COL3|HT16K33_COL4
+        },
+        {HT16K33_2nd,
+            HT16K33_COL_ALLOFF, // 1
+            HT16K33_COL1|HT16K33_COL2,
+            HT16K33_COL2,
+            HT16K33_COL2,
+            HT16K33_COL2,
+            HT16K33_COL2,
+            HT16K33_COL2,
+            HT16K33_COL2
+        },
+        {HT16K33_2nd,
+            HT16K33_COL_ALLOFF, // 2
+            HT16K33_COL2|HT16K33_COL3|HT16K33_COL4,
+            HT16K33_COL1|HT16K33_COL5,
+            HT16K33_COL5,
+            HT16K33_COL3|HT16K33_COL4,
+            HT16K33_COL2,
+            HT16K33_COL1,
+            HT16K33_COL1|HT16K33_COL2|HT16K33_COL3|HT16K33_COL4|HT16K33_COL5,
+        },
+        {HT16K33_2nd,
+            HT16K33_COL_ALLOFF, // 3
+            HT16K33_COL1|HT16K33_COL2|HT16K33_COL3|HT16K33_COL4,
+            HT16K33_COL5,
+            HT16K33_COL5,
+            HT16K33_COL2|HT16K33_COL3|HT16K33_COL4,
+            HT16K33_COL5,
+            HT16K33_COL5,
+            HT16K33_COL1|HT16K33_COL2|HT16K33_COL3|HT16K33_COL4,
+        },
+        {HT16K33_2nd,
+            HT16K33_COL_ALLOFF, // 4
+            HT16K33_COL1|HT16K33_COL5,
+            HT16K33_COL1|HT16K33_COL5,
+            HT16K33_COL1|HT16K33_COL5,
+            HT16K33_COL1|HT16K33_COL2|HT16K33_COL3|HT16K33_COL4|HT16K33_COL5,
+            HT16K33_COL5,
+            HT16K33_COL5,
+            HT16K33_COL5
+        },
+        {HT16K33_2nd,
+            HT16K33_COL_ALLOFF, // 5
+            HT16K33_COL1|HT16K33_COL2|HT16K33_COL3|HT16K33_COL4|HT16K33_COL5,
+            HT16K33_COL1,
+            HT16K33_COL1,
+            HT16K33_COL1|HT16K33_COL2|HT16K33_COL3|HT16K33_COL4,
+            HT16K33_COL5,
+            HT16K33_COL5,
+            HT16K33_COL1|HT16K33_COL2|HT16K33_COL3|HT16K33_COL4,
+        },
+        {HT16K33_2nd,
+            HT16K33_COL_ALLOFF, // 6
+            HT16K33_COL2|HT16K33_COL3|HT16K33_COL4,
+            HT16K33_COL1,
+            HT16K33_COL1,
+            HT16K33_COL2|HT16K33_COL3|HT16K33_COL4,
+            HT16K33_COL1|HT16K33_COL5,
+            HT16K33_COL1|HT16K33_COL5,
+            HT16K33_COL2|HT16K33_COL3|HT16K33_COL4,
+        },
+        {HT16K33_2nd,
+            HT16K33_COL_ALLOFF, // 7
+            HT16K33_COL1|HT16K33_COL2|HT16K33_COL3|HT16K33_COL4|HT16K33_COL5,
+            HT16K33_COL5,
+            HT16K33_COL5,
+            HT16K33_COL3|HT16K33_COL4,
+            HT16K33_COL2,
+            HT16K33_COL2,
+            HT16K33_COL2,
+        },
+        {HT16K33_2nd,
+            HT16K33_COL_ALLOFF, // 8
+            HT16K33_COL2|HT16K33_COL3|HT16K33_COL4,
+            HT16K33_COL1|HT16K33_COL5,
+            HT16K33_COL1|HT16K33_COL5,
+            HT16K33_COL2|HT16K33_COL3|HT16K33_COL4,
+            HT16K33_COL1|HT16K33_COL5,
+            HT16K33_COL1|HT16K33_COL5,
+            HT16K33_COL2|HT16K33_COL3|HT16K33_COL4,
+        },
+        {HT16K33_2nd,
+            HT16K33_COL_ALLOFF, // 9
+            HT16K33_COL2|HT16K33_COL3|HT16K33_COL4,
+            HT16K33_COL1|HT16K33_COL5,
+            HT16K33_COL1|HT16K33_COL5,
+            HT16K33_COL2|HT16K33_COL3|HT16K33_COL4|HT16K33_COL5,
+            HT16K33_COL5,
+            HT16K33_COL5,
+            HT16K33_COL2|HT16K33_COL3|HT16K33_COL4,
+        }
+    };
+    const uint32_t delay = 500;
+    ESP_LOGI(TAG, "DotMatrix7x5font time start");
+    HT16K33_DisplayClear();
+    vTaskDelay( pdMS_TO_TICKS(delay) );
+
+    for (uint8_t i = 0; i < sizeof(targets)/sizeof(ht16k33_7x5font_target); i++)
+    {
+        HT16K33_DisplayFromRawDataAt1Byte(HT16K33_ROW1, targets[i].place, targets[i].col1);
+        HT16K33_DisplayFromRawDataAt1Byte(HT16K33_ROW2, targets[i].place, targets[i].col2);
+        HT16K33_DisplayFromRawDataAt1Byte(HT16K33_ROW3, targets[i].place, targets[i].col3|HT16K33_COL7);
+        HT16K33_DisplayFromRawDataAt1Byte(HT16K33_ROW4, targets[i].place, targets[i].col4|HT16K33_COL7);
+        HT16K33_DisplayFromRawDataAt1Byte(HT16K33_ROW5, targets[i].place, targets[i].col5);
+        HT16K33_DisplayFromRawDataAt1Byte(HT16K33_ROW6, targets[i].place, targets[i].col6|HT16K33_COL7);
+        HT16K33_DisplayFromRawDataAt1Byte(HT16K33_ROW7, targets[i].place, targets[i].col7|HT16K33_COL7);
+        HT16K33_DisplayFromRawDataAt1Byte(HT16K33_ROW8, targets[i].place, targets[i].col8);
+        vTaskDelay( pdMS_TO_TICKS(delay) );
+
+        HT16K33_DisplayFromRawDataAt1Byte(HT16K33_ROW1, targets[i].place, HT16K33_COL_ALLOFF);
+        HT16K33_DisplayFromRawDataAt1Byte(HT16K33_ROW2, targets[i].place, HT16K33_COL_ALLOFF);
+        HT16K33_DisplayFromRawDataAt1Byte(HT16K33_ROW3, targets[i].place, HT16K33_COL_ALLOFF);
+        HT16K33_DisplayFromRawDataAt1Byte(HT16K33_ROW4, targets[i].place, HT16K33_COL_ALLOFF);
+        HT16K33_DisplayFromRawDataAt1Byte(HT16K33_ROW5, targets[i].place, HT16K33_COL_ALLOFF);
+        HT16K33_DisplayFromRawDataAt1Byte(HT16K33_ROW6, targets[i].place, HT16K33_COL_ALLOFF);
+        HT16K33_DisplayFromRawDataAt1Byte(HT16K33_ROW7, targets[i].place, HT16K33_COL_ALLOFF);
+        HT16K33_DisplayFromRawDataAt1Byte(HT16K33_ROW8, targets[i].place, HT16K33_COL_ALLOFF);
+        vTaskDelay( pdMS_TO_TICKS(delay) );
+    }
+    HT16K33_DisplayClear();
+    ESP_LOGI(TAG, "DotMatrix_SandClock time end");
+
+    vTaskDelete(NULL);
+}
+void DotMatrix_7x5font()
+{
+    xTaskCreate(vDotMatrix7x5font_task, "vDotMatrix7x5font_task", 4096 * 1, NULL, 10, NULL);
+}
+
 void vDotMatrixSandClock_task(void *pvParametes)
 {
     ESP_LOGD(TAG, "start DotMatrix_SandClock");

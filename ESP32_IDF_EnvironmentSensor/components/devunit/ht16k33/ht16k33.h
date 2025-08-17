@@ -67,6 +67,19 @@ typedef struct {
     uint8_t col;
 } ht16k33_target;
 
+// 7x5font
+typedef struct {
+    uint8_t place;
+    uint8_t col1;
+    uint8_t col2;
+    uint8_t col3;
+    uint8_t col4;
+    uint8_t col5;
+    uint8_t col6;
+    uint8_t col7;
+    uint8_t col8;
+} ht16k33_7x5font_target;
+
 esp_err_t HT16K33_Init(i2c_master_bus_handle_t i2c_master_bus_handle);
 esp_err_t HT16K33_DeInit();
 esp_err_t HT16K33_SetBrigtness(uint8_t b);
